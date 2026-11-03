@@ -85,6 +85,7 @@ The organizer types the score of every set. The app checks each set against §4 
 - **Change ends:** the referee sees a reminder:
   - in a 21-point set, the first time either side reaches 11;
   - in best of 3, at the end of every set that doesn't finish the match, and in set 3 the first time the leading side reaches 8.
+- **Screen sides:** each referee phone shows the two teams in the order they stand on court. Closing the change-ends reminder swaps them, and a Swap sides button swaps them at any time, for example after the toss. This changes only that phone's display, never the score, and the phone remembers it.
 - **Several courts:** more than one match can be live at the same time.
 - **Matches that already have a result:** to score one live, clear it first (§5.4).
 
@@ -95,6 +96,14 @@ The organizer picks the winner. It counts as **21–0** in one-set matches and *
 ### 5.4 Clearing
 
 Clearing removes whatever result a match has and returns it to Ready. Clearing is refused while the match is locked (§7).
+
+### 5.5 Clearing everything
+
+An organizer can clear every result and draw at once, with the “Xóa tất cả” (Clear All) button at the top of the admin page, next to “Đăng xuất” (Log out).
+
+- **Confirmation:** a warning page asks for the PIN again. A wrong PIN shows an error and counts toward the lockout (§9), but doesn't log the organizer out.
+- **Backup first:** just before clearing, the server saves a full copy of the database next to it, as `backup-before-clear-<UTC date and time>.db`. The page shows the file name. Restoring it works like any backup (ARCHITECTURE.md §8).
+- **Locks don't apply:** this is a reset of the whole tournament.
 
 ## 6. Group standings
 
@@ -249,14 +258,22 @@ Locked (§7) is a flag on top of these states.
 ## 10. Interface
 
 - **Title:** “Trueson 1st Badminton Championship” in both languages, with the subtitle “Giải nội bộ · Đôi nam nữ” / “Internal tournament · Mixed doubles”.
+- **Look:** Trueson colours taken from `icons/TS_logo.png` (black `#1a171b`, gold `#cbbb9d`), always light. Gold never carries text on white.
+- **Logos:** the Trueson logo and the sponsors' logos sit together at the top of every page, with the sponsors' set apart by a thin rule. Tapping the Trueson logo returns to Overview; tapping the sponsors' logos opens the Sponsors page.
+- **Menu:** Tổng quan · Quản lý (organizers only) · Vòng bảng · Loại trực tiếp · Thêm ▾. “Thêm” (More) opens a sub-menu with Nhà tài trợ (Sponsors). On a phone the items share the width: all five fit from 360px wide, and on a 320px phone the Vietnamese labels end in “…”.
+- **Admin access:** spectators see no login button. Organizers open `#admin` (for example `http://<droplet-ip>:8080/#admin`) and enter the PIN once; an Admin tab then appears next to Overview.
 - **Languages:** Vietnamese (the default) and English, with a switch in the header that each browser remembers. Every interface string exists in both languages in `public/i18n.js`.
-- **Devices:** designed for phones first, and works on desktop.
+- **Devices:** designed for phones first, held upright or sideways, and works on tablets and desktop.
+  - Sideways, the header becomes one compact row.
+  - On the referee's live screen, on any screen shorter than 760px, the header steps aside so both teams, Undo and Swap sides fit without scrolling. The menu and Back stay.
+  - `tests/ui/responsive.spec.js` checks every page at 17 sizes in both languages, including heights reduced by the browser's address bar.
 - **Search engines:** every page asks not to be indexed, because player names are on a public address.
 - **Views:**
-  - Overview: progress (x of 13), live matches with score and serving side, upcoming matches, and the podium once decided.
-  - Groups: standings for A and B with Played, W, L, PF, PA and PD; qualifiers marked once the group is complete; tie and draw flags; group results.
-  - Knockout: semifinals leading to the final, plus the 3rd-place match.
-  - Score entry (organizers): typed sets, live scoring with +1 and Undo, walkover, and clear.
+  - Overview: progress (x of 13), live matches with score and serving side, upcoming matches, and the podium once decided, in gold, silver and bronze.
+  - Groups: standings for A and B with Played, W, L, PF, PA and PD; qualifiers marked once the group is complete; tie and draw flags. Each group's matches are folded under “Các trận đấu (n)” and open on a tap; an opened list stays open while the page refreshes.
+  - Knockout: the final first, then the 3rd-place match, then the semifinals.
+  - Score entry (organizers): typed sets, live scoring with +1 and Undo, walkover, clear, and clear everything (§5.5). In the list a locked match (§7) shows a red dot, explained once at the bottom of the page; the reason shows on hover and on the match's own page.
+  - Sponsors, under Thêm: each sponsor's logo and name, with a thank-you line and buttons for the sponsor's Facebook page and website, which open in a new tab. The list is in `public/sponsors.js`: Anh Sơn Movement and Kenichi Miyoshi. The original logos are in `icons/`.
 - **Refresh:** every 3 s while any match is Live, every 15 s otherwise, and only while the tab is visible.
 - **Live taps:** each tap shows whether it was saved. A failed tap says so and retries.
 
@@ -273,6 +290,7 @@ Locked (§7) is a flag on top of these states.
 | `POST /api/matches/:id/walkover` | PIN | Records a walkover winner (§5.3) |
 | `DELETE /api/matches/:id` | PIN | Clears the result (§5.4) |
 | `PUT /api/draws/:group` | PIN | Saves a draw order (§6.3) |
+| `DELETE /api/results` | PIN, typed again | Saves a backup, then clears every result and draw (§5.5) |
 
 Errors return a code, which the interface turns into a message in the current language.
 
@@ -295,6 +313,7 @@ Errors return a code, which the interface turns into a message in the current la
 | 422 | `incomplete` | The sets don't decide the match |
 | 422 | `draw_mismatch` | The draw doesn't list exactly the tied teams |
 | 429 | `too_many_attempts` | Too many wrong PINs (§9) |
+| 500 | `server_error` | Anything unexpected; the details are in the server log |
 
 **Stored data:** for each match, typed sets, live data (first server and point list), or a walkover winner; and for each group, a draw order. Everything else is computed on every request.
 
@@ -332,3 +351,13 @@ All agreed with the organizer on 3 November 2026. Change a decision here first, 
 | D16 | Site title “Trueson 1st Badminton Championship” | §10 |
 | D17 | Code is copied to the droplet with rsync | — |
 | D18 | Playwright allowed as a dev-only tool for checking the pages | — |
+| D19 | Trueson brand look from the logo, always light | §10 |
+| D20 | Organizers reach the controls through the hidden `#admin` link; then an Admin tab appears next to Overview | §10 |
+| D21 | The referee screen follows the teams changing ends: the reminder swaps the panels, and Swap sides does it by hand | §5.2 |
+| D22 | A Sponsors page under a “Thêm / More” sub-menu; sponsors' logos next to the Trueson logo | §10 |
+| D23 | Clearing everything needs the PIN typed again, and the server saves a backup first | §5.5 |
+| D24 | “Xóa tất cả” (Clear All) and “Đăng xuất” (Log out) are buttons at the top of the admin page | §5.5 |
+| D25 | The Trueson logo returns to Overview; each sponsor shows its Facebook and website links | §10 |
+| D26 | On screens shorter than 760px the live screen hides the header so the scoring controls fit | §10 |
+| D27 | Knockout tab order: final, 3rd-place match, semifinals; group matches folded under each table | §10 |
+| D28 | Locked matches in the admin list show a red dot with one explanation at the bottom; podium in gold, silver and bronze | §10 |

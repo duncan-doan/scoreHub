@@ -12,7 +12,7 @@ The app is one Docker container on the DigitalOcean droplet that already runs an
 
 | Part | Built with | Job |
 |---|---|---|
-| Web pages | Plain HTML, CSS, JS; no build step | Overview, groups, knockout, score entry; language switch remembered per browser |
+| Web pages | Plain HTML, CSS, JS; no build step | Overview, groups, knockout, score entry; language switch remembered per browser. The browser loads the same `rules.js` (served at `/rules.js`) for the winner preview while a score is typed |
 | Server | Node.js + Express | Serves the pages and the JSON API; checks the admin PIN and locks out repeated wrong guesses |
 | Rules engine | One JS module, tested with `node --test` | Score validation, live sets and serving, standings, tiebreaks, locks, bracket, podium |
 | Database | SQLite via better-sqlite3 | One file; holds only what people enter |
@@ -98,6 +98,7 @@ badminton/
 │   ├── diagrams/           SVG diagrams
 │   ├── Điều lệ giải.pdf    original rules (Vietnamese)
 │   └── Giai_cau_long_doi_nam_nu_7_doi.xlsx   original teams and match order
+├── icons/                  original logos: Trueson and the sponsors (full size, not served)
 ├── server/
 │   ├── index.js            Express: pages, API, PIN check, lockout
 │   ├── db.js               SQLite setup and queries
@@ -109,8 +110,15 @@ badminton/
 │   ├── index.html
 │   ├── app.js
 │   ├── i18n.js             every string, vi + en
-│   └── styles.css
-├── tests/ui/               Playwright checks (dev-only)
+│   ├── logo.png            small copy of icons/TS_logo.png for the header
+│   ├── sponsors.js         sponsor names and logos, in display order
+│   ├── sponsors/           small web copies of the sponsors' logos
+│   └── styles.css          brand colours in the first block
+├── tests/ui/               Playwright checks (dev-only), run in name order against server.js (an empty app):
+│   ├── features.spec.js    logo link, sponsor links, draws, locks, a refused correction, a live best of 3
+│   ├── responsive.spec.js  every page at 17 sizes, upright and sideways, in both languages
+│   └── tournament.spec.js  a whole tournament on a phone, sideways live scoring, sponsors, clear all
+├── playwright.config.js    phone-sized Chromium, port 3100
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example            ADMIN_PIN=
@@ -152,9 +160,9 @@ Repeat step 4, then `docker compose up -d --build`. The data in `./data` is kept
 
 ### Backup, restore, reset
 
-- **Backup:** `docker compose exec app npm run backup` writes `data/backup-<date>.db` using SQLite's own backup, which is safe while the app runs. Then copy it off the droplet: `scp <user>@<droplet-ip>:/opt/badminton/data/backup-*.db .`
+- **Backup:** `docker compose exec app npm run backup` writes `data/backup-<UTC date and time>.db`, for example `backup-2026-11-03T0718.db`, using SQLite's own backup, which is safe while the app runs. Then copy it off the droplet: `scp <user>@<droplet-ip>:/opt/badminton/data/backup-*.db .`
 - **Restore:** `docker compose down`, copy the backup over `data/tournament.db`, then `docker compose up -d`.
-- **Reset after the rehearsal:** `docker compose down`, delete `data/tournament.db`, then `docker compose up -d`.
+- **Reset after the rehearsal:** use “Xóa toàn bộ kết quả” (Clear all results) at the bottom of the admin page. It asks for the PIN again and saves `data/backup-before-clear-<UTC date and time>.db` first (SPEC §5.5).
 
 ### Never on this droplet
 

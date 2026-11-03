@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Trueson 1st Badminton Championship</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="logos">
+      <a class="home" href="#" data-i18n-title="navOverview"><img class="logo" src="logo.png" alt="Trueson" width="26" height="44"></a>
+      <a class="sponsor-logos" href="#sponsors" data-i18n-label="sponsors"></a>
+    </div>
+    <div class="titles">
+      <h1 data-i18n="title">Trueson 1st Badminton Championship</h1>
+      <p data-i18n="subtitle">Giải nội bộ · Đôi nam nữ</p>
+    </div>
+    <button type="button" class="pill" data-action="lang" data-i18n="switchLanguage">English</button>
+  </header>
+  <nav class="tabs">
+    <a href="#" data-view="overview" data-i18n="navOverview">Tổng quan</a>
+    <a href="#admin" data-view="admin" data-i18n="navAdmin" hidden>Quản lý</a>
+    <a href="#groups" data-view="groups" data-i18n="navGroups">Vòng bảng</a>
+    <a href="#knockout" data-view="knockout" data-i18n="navKnockout">Loại trực tiếp</a>
+    <div class="more">
+      <button type="button" class="more-toggle" data-action="more" aria-expanded="false" aria-haspopup="true" data-i18n="navMore">Thêm</button>
+      <div class="more-menu" hidden>
+        <a href="#sponsors" data-view="sponsors" data-i18n="sponsors">Nhà tài trợ</a>
+      </div>
+    </div>
+  </nav>
+  <main></main>
+</body>
+</html>

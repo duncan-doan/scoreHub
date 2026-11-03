@@ -77,15 +77,16 @@ Scores, standings and bracket for the 7-team internal tournament. Rules and deci
 
 ### Stack (ask before changing)
 
-- Node.js + Express, SQLite (better-sqlite3), plain HTML/CSS/JS.
+- Node.js 22 + Express, SQLite (better-sqlite3), plain HTML/CSS/JS.
 - No frontend framework, no build step, no new dependencies without asking.
 - Playwright is approved as a dev-only dependency for checking the pages; it never goes in the Docker image.
 
 ### Commands
 
+- `source ~/.nvm/nvm.sh && nvm use`: run first in every shell; the default Node here is 21, and better-sqlite3 needs 22 (`.nvmrc`)
 - `npm test`: run after every change
-- `npm run test:ui`: Playwright checks, phone-sized, both languages
-- `npm start`: http://localhost:3000
+- `npm run test:ui`: Playwright checks, phone-sized, both languages (on a new machine, run `npx playwright install chromium` once first). The files share one in-memory app and run in name order, so each must leave the tournament empty when it finishes.
+- `ADMIN_PIN=<6+ characters> npm start`: http://localhost:3000
 - `docker compose up -d --build`: http://localhost:8080
 - `npm run backup`: safe copy of the database (on the droplet: `docker compose exec app npm run backup`)
 

@@ -131,6 +131,12 @@ describe('§6.3 draws', () => {
     });
   });
 
+  test('an unknown group is not found', () => {
+    for (const group of ['C', '__proto__']) {
+      assert.throws(() => apply({}, {}, { type: 'draw', group, order: [] }), { code: 'not_found' });
+    }
+  });
+
   test('a saved draw is ignored once the tie changes', () => {
     const s = computeState(seed, typed(GROUPS_DONE), { A: ['A3', 'A1', 'A2'] });
     assert.deepEqual(order(s, 'A'), ['A1', 'A3', 'A2']);
@@ -207,6 +213,12 @@ describe('§5.2 live scoring', () => {
     const decided = { G1: live(1, times(21, [1])) };
     assert.equal(computeState(seed, decided).matches[0].state, 'finished');
     assert.throws(() => apply(decided, {}, { type: 'point', match: 'G1', side: 2, count: 21 }), { code: 'match_decided' });
+  });
+
+  test('a tap or undo without a point count is malformed', () => {
+    const started = { G1: live(1, [1]) };
+    assert.throws(() => apply(started, {}, { type: 'point', match: 'G1', side: 1 }), { code: 'invalid_input' });
+    assert.throws(() => apply(started, {}, { type: 'undo', match: 'G1', count: '1' }), { code: 'invalid_input' });
   });
 
   test('two phones on one match: the second tap with an old count is refused', () => {

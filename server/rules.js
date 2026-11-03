@@ -262,7 +262,7 @@ function changeResult(match, current, change) {
       return { kind: 'live', data: { firstServer: change.side, points: live?.points ?? [] } };
     case 'point':
     case 'undo': {
-      if (change.type === 'point' && !isSide(change.side)) throw new RuleError('invalid_input');
+      if ((change.type === 'point' && !isSide(change.side)) || !isPoints(change.count)) throw new RuleError('invalid_input');
       if (current && !live) throw new RuleError('has_result');
       if (!live) throw new RuleError(change.type === 'point' ? 'no_server' : 'nothing_to_undo');
       if (change.count !== live.points.length) throw new RuleError('count_mismatch', { count: live.points.length });
@@ -283,7 +283,10 @@ function changeResult(match, current, change) {
 export function applyChange(seed, results, draws, change) {
   const before = computeState(seed, results, draws);
   const next = { results: { ...results }, draws: { ...draws } };
-  const target = change.type === 'draw' ? before.groups[change.group] : before.matches.find((m) => m.id === change.match);
+  const target =
+    change.type === 'draw'
+      ? Object.hasOwn(before.groups, change.group) && before.groups[change.group]
+      : before.matches.find((m) => m.id === change.match);
   if (!target) throw new RuleError('not_found');
   if (target.lockedBy.length) throw new RuleError('locked', { by: target.lockedBy });
 

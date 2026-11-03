@@ -1,0 +1,263 @@
+/* Trueson 1st Badminton Championship. Always light (SPEC §10). Phone first. */
+
+/* Trueson brand colours, sampled from icons/TS_logo.png. Gold is too light for text on white
+   (about 2:1), so it only fills shapes or sits behind black text (about 9:1). */
+:root {
+  --brand: #1a171b;      /* logo black: header text, buttons, active tab */
+  --brand-ink: #ffffff;  /* text on --brand */
+  --brand-gold: #cbbb9d; /* logo gold: header rule, rank circles, progress, champion */
+  --brand-soft: #f4efe6; /* light gold tint: highlighted rows and notices */
+}
+
+:root {
+  --gold: #e2c46a;
+  --silver: #d4d8dd;
+  --bronze: #d9a679;
+  --live: #d9480f;
+  --live-soft: #fff0e6;
+  --bg: #f6f4f0;
+  --surface: #ffffff;
+  --ink: #1a171b;
+  --muted: #6b655c;
+  --line: #e2ddd3;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --radius: 12px;
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%; /* stop iPhone Safari enlarging text when the phone is turned sideways */
+  text-size-adjust: 100%;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: var(--bg); }
+[hidden] { display: none !important; }
+:focus-visible { outline: 3px solid var(--live); outline-offset: 2px; }
+h2 { margin: 0 0 10px; font-size: 1.1rem; }
+h2 small { margin-left: 8px; font-size: 0.8rem; font-weight: 400; color: var(--muted); }
+h3 { margin: 0; font-size: 1rem; }
+p { margin: 0; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Header and tabs */
+/* Phone: logos and the language button on one row, the title below. Wider: all three on one row. */
+.top {
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "logos lang" "titles titles";
+  align-items: center; gap: 8px 12px;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+  background: var(--surface); color: var(--brand); border-bottom: 4px solid var(--brand-gold);
+}
+@media (min-width: 640px) { .top { grid-template-columns: auto 1fr auto; grid-template-areas: "logos titles lang"; } }
+.logos { grid-area: logos; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.home { display: flex; flex: none; }
+.logo { flex: none; width: auto; height: 44px; }
+/* The sponsors' logos, set apart from Trueson's by a thin rule. */
+.sponsor-logos { display: flex; align-items: center; gap: 10px; min-width: 0; padding-left: 10px; border-left: 1px solid var(--line); }
+.sponsor-logos img { width: auto; height: 40px; min-width: 0; object-fit: contain; }
+.titles { grid-area: titles; min-width: 0; }
+.top h1 { margin: 0; font-size: 1.15rem; line-height: 1.2; text-wrap: balance; }
+.top p { margin-top: 2px; font-size: 0.85rem; color: var(--muted); }
+.pill {
+  grid-area: lang; padding: 5px 12px; border: 1px solid currentColor; border-radius: 999px;
+  background: transparent; color: inherit; font: inherit; font-size: 0.85rem; cursor: pointer;
+}
+
+.tabs {
+  position: sticky; top: 0; z-index: 5; display: flex;
+  padding: 0 max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+/* Organizers see five items: on a phone they share the width and the text shrinks a little to fit 360px. */
+.tabs > a, .more-toggle {
+  flex: 1 1 auto; min-width: 0; padding: 12px 6px 9px; border: 0; border-bottom: 3px solid transparent;
+  background: none; color: var(--muted); font: inherit; font-size: clamp(0.78rem, 3.4vw, 1rem); font-weight: 600;
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; cursor: pointer;
+}
+@media (min-width: 640px) { .tabs > a, .more-toggle { flex: none; padding-inline: 14px; } }
+@media (max-width: 400px) {
+  .tabs { padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
+  .tabs > a, .more-toggle { padding-inline: 4px; }
+}
+.tabs > a.active, .more-toggle.active { color: var(--brand); border-bottom-color: var(--brand); }
+.more { position: relative; display: flex; flex: 0 0 auto; }
+.more-toggle::after { content: ""; display: inline-block; margin-left: 4px; border: 4px solid transparent; border-top-color: currentColor; border-bottom-width: 0; vertical-align: 2px; }
+.more-menu {
+  position: absolute; top: 100%; right: 0; z-index: 6; display: grid; min-width: 180px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgb(26 23 27 / 0.12);
+}
+.more-menu a { padding: 10px 12px; border-radius: 6px; color: var(--ink); font-weight: 600; text-decoration: none; }
+.more-menu a.active { background: var(--brand-soft); }
+
+main {
+  display: grid; gap: 20px; max-width: 720px; margin: 0 auto;
+  padding: 16px max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left));
+}
+section { min-width: 0; }
+
+/* Match cards */
+.cards { display: grid; gap: 10px; }
+@media (min-width: 640px) { .cards { grid-template-columns: 1fr 1fr; } }
+.match { display: grid; gap: 6px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.match.is-live { border-color: var(--live); box-shadow: inset 0 0 0 1px var(--live); }
+.match header { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8rem; color: var(--muted); }
+.badge { font-weight: 600; }
+.is-live .badge { color: var(--live); }
+.is-finished .badge { color: var(--brand); }
+.side { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.side .name { min-width: 0; overflow-wrap: anywhere; }
+.side.won .name { font-weight: 700; }
+.score { display: flex; gap: 6px; font-variant-numeric: tabular-nums; }
+.set { min-width: 1.6em; text-align: right; color: var(--muted); }
+.side.won .set { color: var(--ink); }
+.set.now { color: var(--live); font-weight: 700; }
+.serve { display: inline-block; width: 9px; height: 9px; margin-left: 6px; border-radius: 50%; background: var(--live); vertical-align: middle; }
+
+/* Overview */
+.progress p { margin-bottom: 6px; font-weight: 600; }
+.bar { height: 8px; overflow: hidden; background: var(--line); border-radius: 999px; }
+.bar span { display: block; height: 100%; background: var(--brand-gold); }
+.podium ol { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.podium li { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.podium li span { font-weight: 600; }
+.podium .place-champion { background: var(--gold); border-color: var(--gold); font-size: 1.1rem; }
+.podium .place-runnerUp { background: var(--silver); border-color: var(--silver); }
+.podium .place-third { background: var(--bronze); border-color: var(--bronze); }
+.empty, .legend, .hint { font-size: 0.9rem; color: var(--muted); }
+
+/* Standings */
+.table-wrap { overflow-x: auto; margin-bottom: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.standings { width: 100%; border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.standings th, .standings td { padding: 8px 6px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.standings tr:last-child td { border-bottom: 0; }
+.standings th { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+.standings th:first-child, .standings td:first-child { width: 2em; text-align: center; }
+.standings th:nth-child(2), .standings td.team { text-align: left; white-space: normal; }
+.standings tr.qualified td { background: var(--brand-soft); }
+.rank { display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; border-radius: 50%; }
+.qualified .rank, .rank-key { background: var(--brand-gold); color: var(--brand); font-weight: 700; }
+.rank-key { display: inline-block; width: 0.9em; height: 0.9em; margin-right: 6px; border-radius: 50%; vertical-align: -0.1em; }
+section > .legend { margin-bottom: 10px; }
+
+/* Messages */
+.note, .locked { padding: 10px 12px; background: var(--live-soft); border-radius: 8px; }
+.note { margin-bottom: 10px; }
+.locked { font-size: 0.9rem; }
+.notice { padding: 10px 12px; background: var(--brand-soft); border-radius: 8px; font-weight: 600; }
+.notice.error { background: var(--danger-soft); color: var(--danger); }
+.form-error, .preview.error { color: var(--danger); }
+.note-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+.note-row .note { margin: 0; flex: 1 1 220px; }
+
+/* Forms and buttons */
+.panel { padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.stack { display: grid; gap: 10px; }
+.narrow { max-width: 360px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.button {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 16px;
+  border: 1px solid var(--brand); border-radius: 10px; background: var(--brand); color: var(--brand-ink);
+  font: inherit; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer;
+}
+.button.secondary { background: var(--surface); color: var(--brand); }
+.button.danger { justify-self: start; background: var(--surface); border-color: var(--danger); color: var(--danger); }
+.button.small { min-height: 36px; padding: 4px 12px; font-size: 0.9rem; }
+.button.big { min-height: 64px; font-size: 1.1rem; }
+.button:disabled { opacity: 0.5; cursor: default; }
+.link { justify-self: start; padding: 0; background: none; border: 0; color: var(--brand); font: inherit; text-decoration: underline; cursor: pointer; }
+.back { color: var(--brand); font-weight: 600; text-decoration: none; }
+.admin-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; }
+.admin-head h2 { margin: 0; }
+label { font-weight: 600; }
+input, select { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: inherit; font-size: 1.1rem; }
+.set-row { display: grid; grid-template-columns: 4.5em 1fr 1fr; gap: 8px; align-items: center; }
+.set-row.head strong { font-size: 0.85rem; overflow-wrap: anywhere; }
+.set-row input { width: 100%; text-align: center; }
+.preview { min-height: 1.4em; color: var(--muted); }
+.preview.ok { color: var(--brand); font-weight: 600; }
+
+/* Sponsors page */
+.sponsors { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 12px 0 0; padding: 0; list-style: none; }
+.sponsor { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 10px; justify-items: center; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); text-align: center; }
+.sponsor img { width: 100%; max-width: 240px; height: 110px; object-fit: contain; }
+.socials { display: flex; flex-wrap: wrap; justify-content: center; align-content: start; gap: 8px; }
+.social {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 12px;
+  border: 1px solid var(--line); border-radius: 999px; color: var(--ink); font-size: 0.9rem; font-weight: 600; text-decoration: none;
+}
+.social svg { flex: none; width: 18px; height: 18px; fill: currentColor; }
+.social.facebook svg { fill: #1877f2; } /* Facebook's own blue, so the link is recognisable at a glance */
+.social.website svg { fill: none; }
+
+/* Live scoring: both sides, Undo and the save status fit on a phone screen without scrolling. */
+.live { display: grid; gap: 10px; }
+.live-head { display: flex; align-items: baseline; gap: 14px; }
+.live-head h2 { margin: 0; }
+.courts { display: grid; gap: 10px; }
+@media (orientation: landscape) and (min-width: 560px) { .courts { grid-template-columns: 1fr 1fr; } }
+.court {
+  display: grid; justify-items: center; align-content: center; gap: 4px; min-height: 22vh; padding: 12px;
+  border: 2px solid var(--line); border-radius: 16px; background: var(--surface);
+  font: inherit; color: inherit; cursor: pointer; touch-action: manipulation;
+}
+.court .name { font-size: 1.1rem; font-weight: 700; text-align: center; }
+.court .big { font-size: 4rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.court.serving { border-color: var(--live); background: var(--live-soft); }
+.court.won { border-color: var(--brand-gold); background: var(--brand-soft); }
+.court:disabled { cursor: default; }
+.serve-label { font-size: 0.9rem; font-weight: 700; color: var(--live); }
+.sets-won { font-size: 0.9rem; color: var(--muted); }
+.result { font-size: 1.2rem; font-weight: 700; text-align: center; color: var(--brand); }
+.history { text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
+.live-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.status { font-size: 0.9rem; color: var(--muted); }
+.overlay {
+  position: fixed; inset: 0; z-index: 20; display: grid; place-content: center; gap: 8px;
+  border: 0; background: rgb(23 33 28 / 0.9); color: #ffffff; font: inherit; text-align: center; cursor: pointer;
+}
+.overlay strong { font-size: 2.5rem; }
+
+/* A phone turned sideways is only about 360px tall: shrink the header so the live screen fits without scrolling. */
+@media (max-height: 500px) {
+  .top { grid-template-columns: auto 1fr auto; grid-template-areas: "logos titles lang"; padding-top: max(6px, env(safe-area-inset-top)); padding-bottom: 6px; border-bottom-width: 3px; }
+  .logo { height: 32px; }
+  .sponsor-logos img { height: 28px; }
+  .top h1 { font-size: 1rem; }
+  .top p, .live .hint { display: none; }
+  .tabs > a, .more-toggle { padding-top: 8px; padding-bottom: 6px; }
+  main { gap: 12px; padding-top: 10px; }
+  .live { gap: 8px; }
+  .court { min-height: 0; padding: 8px; }
+  .court .big { font-size: 3rem; }
+}
+
+/* The referee's live screen on any short screen (small phones, any phone sideways): the scoring controls
+   come first, so the header with the logos steps aside; the menu and Back stay. */
+@media (max-height: 760px) {
+  body[data-page="live"] .top, .live .hint { display: none; }
+}
+@media (max-height: 700px) and (orientation: portrait) {
+  .court { padding: 8px; }
+  .court .big { font-size: 3.25rem; }
+}
+
+/* Groups tab: each group's matches fold away under its table. */
+.group-matches > summary {
+  display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 2px;
+  color: var(--brand); font-weight: 600; cursor: pointer; list-style: none;
+}
+.group-matches > summary::-webkit-details-marker { display: none; }
+.group-matches > summary::before {
+  content: ""; width: 0; height: 0; border: 5px solid transparent; border-left-color: currentColor; border-right-width: 0;
+  transition: transform 0.15s;
+}
+.group-matches[open] > summary::before { transform: rotate(90deg); }
+.group-matches > .cards { margin-top: 4px; }
+
+/* Admin: a locked match is marked with a red dot, explained once at the top of the page. */
+.lock-dot { display: inline-block; flex: none; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; background: var(--danger); vertical-align: 0; }
+.lock-legend { display: flex; align-items: baseline; gap: 2px; }
+@media (prefers-reduced-motion: reduce) { .group-matches > summary::before { transition: none; } }

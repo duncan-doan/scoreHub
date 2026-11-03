@@ -44,6 +44,12 @@ CREATE TABLE draws (
   team_codes TEXT NOT NULL,      -- JSON array in drawn order
   updated_at TEXT NOT NULL
 );
+
+CREATE TABLE history (         -- SPEC §5.6: one row per Clear All
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  cleared_at TEXT NOT NULL,      -- server time, UTC
+  state      TEXT NOT NULL       -- JSON: the computed tournament, as /api/state returned it then
+);
 ```
 
 | `kind` | `data` |

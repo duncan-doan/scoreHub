@@ -22,6 +22,11 @@ export function openDb(file = DB_FILE) {
       team_codes TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS history (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      cleared_at TEXT NOT NULL,
+      state      TEXT NOT NULL
+    );
   `);
   const q = {
     results: db.prepare('SELECT match_id, kind, data FROM results'),
@@ -35,6 +40,10 @@ export function openDb(file = DB_FILE) {
       ON CONFLICT (group_id) DO UPDATE SET team_codes = excluded.team_codes, updated_at = excluded.updated_at`),
     clearResults: db.prepare('DELETE FROM results'),
     clearDraws: db.prepare('DELETE FROM draws'),
+    addHistory: db.prepare('INSERT INTO history (cleared_at, state) VALUES (?, ?)'),
+    history: db.prepare('SELECT id, cleared_at, state FROM history ORDER BY id DESC'),
+    historyEntry: db.prepare('SELECT id, cleared_at, state FROM history WHERE id = ?'),
+    deleteHistory: db.prepare('DELETE FROM history WHERE id = ?'),
   };
 
   return {
@@ -67,6 +76,23 @@ export function openDb(file = DB_FILE) {
       db.prepare('VACUUM INTO ?').run(join(dirname(file), name));
       return name;
     },
+    // SPEC §5.6: the computed tournament, saved as it was just before Clear All; returns the new entry's id.
+    archive(state) {
+      return Number(q.addHistory.run(new Date().toISOString(), JSON.stringify(state)).lastInsertRowid);
+    },
+    // Newest first, with what the list shows: when it was cleared, who won, how far it got.
+    historyList() {
+      return q.history.all().map((r) => {
+        const s = JSON.parse(r.state);
+        const champion = s.teams.find((t) => t.code === s.podium.champion)?.name ?? null;
+        return { id: r.id, clearedAt: r.cleared_at, champion, finished: s.progress.finished, total: s.progress.total };
+      });
+    },
+    historyEntry(id) {
+      const r = q.historyEntry.get(id);
+      return r ? { id: r.id, clearedAt: r.cleared_at, state: JSON.parse(r.state) } : null;
+    },
+    deleteHistory: (id) => q.deleteHistory.run(id).changes > 0,
     transaction: (fn) => db.transaction(fn)(),
     backup: (dest) => db.backup(dest),
     close: () => db.close(),

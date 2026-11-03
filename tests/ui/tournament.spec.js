@@ -160,6 +160,7 @@ test('sponsors: logos next to the Trueson logo, and a page under More', async ({
 
   await page.getByRole('button', { name: 'Thêm' }).click();
   await expect(page.locator('.more-menu')).toBeVisible();
+  await expect(page.locator('.more-menu a:visible')).toHaveText(['Nhà tài trợ']); // History is for organizers only
   await page.keyboard.press('Escape');
   await expect(page.locator('.more-menu')).toBeHidden();
 
@@ -173,6 +174,10 @@ test('sponsors: logos next to the Trueson logo, and a page under More', async ({
   await page.goto('/');
   await page.locator('header .sponsor-logos').click(); // the sponsors' logos lead there too
   await expect(page).toHaveURL(/#sponsors$/);
+
+  // Typing History's address without the PIN only shows the login form.
+  await page.goto('/#history');
+  await expect(page.getByRole('heading', { name: 'Đăng nhập quản lý' })).toBeVisible();
 });
 
 // Runs after the whole tournament above, so there is everything to clear.
@@ -194,6 +199,27 @@ test('clearing every result needs the PIN typed again', async ({ page }) => {
   await page.getByRole('button', { name: 'Xóa toàn bộ', exact: true }).click();
   await expect(page).toHaveURL(/#admin$/);
   await expect(page.getByText('Đã xóa toàn bộ kết quả.')).toBeVisible();
+  await expect(page.getByText('Kết quả cũ đã được lưu vào Lịch sử.')).toBeVisible();
   await page.getByRole('link', { name: 'Tổng quan' }).click();
   await expect(page.getByText('Đã đấu 0/13 trận')).toBeVisible();
+
+  // The cleared tournament is the newest entry in History (under Thêm), as a read-only copy.
+  await page.getByRole('button', { name: 'Thêm' }).click();
+  await page.locator('.more-menu').getByRole('link', { name: 'Lịch sử' }).click();
+  const newest = page.locator('.history-item').first();
+  await expect(newest).toContainText('Vô địch: Duyên – Khải');
+  await expect(newest).toContainText('Đã đấu 13/13 trận');
+  const entries = await page.locator('.history-item').count();
+  await newest.getByRole('link', { name: 'Xem' }).click();
+  await expect(page.locator('.podium li')).toHaveText([/Vô địch\s*Duyên – Khải/, /Giải Nhì\s*Nguyên – Quỳnh/, /Giải Ba\s*Bảo – Miyoshi/]);
+  await expect(page.locator('[data-match="FINAL"] .side').first()).toContainText('151316');
+  await expect(page.locator('[data-group="B"] tbody .team .name')).toHaveText(['Bảo – Miyoshi', 'Huệ – Trinh', 'Viễn – Đăng', 'An – Bích']);
+  await expect(page.locator('main a[href^="#edit"], main a[href^="#live"], main form')).toHaveCount(0); // nothing editable
+
+  // Deleting it, after confirming.
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Xóa bản lưu' }).click();
+  await expect(page).toHaveURL(/#history$/);
+  await expect(page.getByText('Đã xóa bản lưu.')).toBeVisible();
+  await expect(page.locator('.history-item')).toHaveCount(entries - 1);
 });

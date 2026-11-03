@@ -102,8 +102,19 @@ Clearing removes whatever result a match has and returns it to Ready. Clearing i
 An organizer can clear every result and draw at once, with the “Xóa tất cả” (Clear All) button at the top of the admin page, next to “Đăng xuất” (Log out).
 
 - **Confirmation:** a warning page asks for the PIN again. A wrong PIN shows an error and counts toward the lockout (§9), but doesn't log the organizer out.
-- **Backup first:** just before clearing, the server saves a full copy of the database next to it, as `backup-before-clear-<UTC date and time>.db`. The page shows the file name. Restoring it works like any backup (ARCHITECTURE.md §8).
+- **History first:** if anything was entered, the whole tournament as it stood is saved in History (§5.6), in the same step as the clearing.
+- **Backup too:** just before clearing, the server also saves a full copy of the database next to it, as `backup-before-clear-<UTC date and time>.db`. The page shows the file name. Restoring it works like any backup (ARCHITECTURE.md §8).
 - **Locks don't apply:** this is a reset of the whole tournament.
+
+### 5.6 History
+
+Organizers can look back at every tournament that was cleared.
+
+- **Where:** “Lịch sử” (History) under the “Thêm” (More) menu, shown only after logging in. The server gives History only to requests with the PIN, so spectators can't open it by typing its address either.
+- **The list:** newest first. Each entry shows when it was cleared (date and time; entries have no name), the champion if there was one, and how many matches had been played.
+- **One entry:** a read-only copy of the tournament exactly as it was: podium, final, 3rd-place match, semi-finals, both group tables and every match score. Nothing in it can be edited. A match that was still being played shows as “Chưa xong” (not finished).
+- **Deleting:** organizers can delete an entry (for example the rehearsal) after confirming. Deleted entries can't be brought back from the app, though the backup files from §5.5 remain.
+- **Nothing entered:** Clear All on an empty tournament saves no entry.
 
 ## 6. Group standings
 
@@ -260,7 +271,7 @@ Locked (§7) is a flag on top of these states.
 - **Title:** “Trueson 1st Badminton Championship” in both languages, with the subtitle “Giải nội bộ · Đôi nam nữ” / “Internal tournament · Mixed doubles”.
 - **Look:** Trueson colours taken from `icons/TS_logo.png` (black `#1a171b`, gold `#cbbb9d`), always light. Gold never carries text on white.
 - **Logos:** the Trueson logo and the sponsors' logos sit together at the top of every page, with the sponsors' set apart by a thin rule. Tapping the Trueson logo returns to Overview; tapping the sponsors' logos opens the Sponsors page.
-- **Menu:** Tổng quan · Quản lý (organizers only) · Vòng bảng · Loại trực tiếp · Thêm ▾. “Thêm” (More) opens a sub-menu with Nhà tài trợ (Sponsors). On a phone the items share the width: all five fit from 360px wide, and on a 320px phone the Vietnamese labels end in “…”.
+- **Menu:** Tổng quan · Quản lý (organizers only) · Vòng bảng · Loại trực tiếp · Thêm ▾. “Thêm” (More) opens a sub-menu with Nhà tài trợ (Sponsors), plus Lịch sử (History) for organizers. On a phone the items share the width: all five fit from 360px wide, and on a 320px phone the Vietnamese labels end in “…”.
 - **Admin access:** spectators see no login button. Organizers open `#admin` (for example `http://<droplet-ip>:8080/#admin`) and enter the PIN once; an Admin tab then appears next to Overview.
 - **Languages:** Vietnamese (the default) and English, with a switch in the header that each browser remembers. Every interface string exists in both languages in `public/i18n.js`.
 - **Devices:** designed for phones first, held upright or sideways, and works on tablets and desktop.
@@ -290,7 +301,10 @@ Locked (§7) is a flag on top of these states.
 | `POST /api/matches/:id/walkover` | PIN | Records a walkover winner (§5.3) |
 | `DELETE /api/matches/:id` | PIN | Clears the result (§5.4) |
 | `PUT /api/draws/:group` | PIN | Saves a draw order (§6.3) |
-| `DELETE /api/results` | PIN, typed again | Saves a backup, then clears every result and draw (§5.5) |
+| `DELETE /api/results` | PIN, typed again | Saves a backup and a History entry, then clears every result and draw (§5.5) |
+| `GET /api/history` | PIN | The History list, newest first (§5.6) |
+| `GET /api/history/:id` | PIN | One saved tournament, as `/api/state` returned it then |
+| `DELETE /api/history/:id` | PIN | Deletes one History entry |
 
 Errors return a code, which the interface turns into a message in the current language.
 
@@ -315,7 +329,7 @@ Errors return a code, which the interface turns into a message in the current la
 | 429 | `too_many_attempts` | Too many wrong PINs (§9) |
 | 500 | `server_error` | Anything unexpected; the details are in the server log |
 
-**Stored data:** for each match, typed sets, live data (first server and point list), or a walkover winner; and for each group, a draw order. Everything else is computed on every request.
+**Stored data:** for each match, typed sets, live data (first server and point list), or a walkover winner; and for each group, a draw order. Everything else is computed on every request. History entries store the computed tournament as it was when cleared.
 
 ## 11. Differences from the original documents
 
@@ -361,3 +375,4 @@ All agreed with the organizer on 3 November 2026. Change a decision here first, 
 | D26 | On screens shorter than 760px the live screen hides the header so the scoring controls fit | §10 |
 | D27 | Knockout tab order: final, 3rd-place match, semifinals; group matches folded under each table | §10 |
 | D28 | Locked matches in the admin list show a red dot with one explanation at the bottom; podium in gold, silver and bronze | §10 |
+| D29 | Clear All saves the tournament in History; History is organizers-only, named by date and time, entries can be deleted with the PIN, each a full read-only copy | §5.6 |

@@ -82,11 +82,28 @@ export function createApp({ db, seed, pin, now = Date.now }) {
   app.post('/api/matches/:id/walkover', admin, write((p, b) => ({ type: 'walkover', match: p.id, winner: b.winner })));
   app.delete('/api/matches/:id', admin, write((p) => ({ type: 'clear', match: p.id })));
   app.put('/api/draws/:group', admin, write((p, b) => ({ type: 'draw', group: p.group, order: b.order })));
-  // §5.5: clears everything after saving a backup. The page sends the PIN typed again as the confirmation.
+  // §5.5–§5.6: clears everything after saving a backup file and, if anything was entered, a History entry.
+  // The page sends the PIN typed again as the confirmation.
   app.delete('/api/results', admin, (req, res) => {
     const backup = db.snapshot();
-    db.clearAll();
-    res.json({ ...state(), backup });
+    const archived = db.transaction(() => {
+      const { results, draws } = db.load();
+      const entered = Object.keys(results).length > 0 || Object.keys(draws).length > 0;
+      const id = entered ? db.archive(computeState(seed, results, draws)) : null;
+      db.clearAll();
+      return id;
+    });
+    res.json({ ...state(), backup, archived });
+  });
+  app.get('/api/history', admin, (req, res) => res.json(db.historyList()));
+  app.get('/api/history/:id', admin, (req, res) => {
+    const entry = db.historyEntry(Number(req.params.id));
+    if (entry) res.json(entry);
+    else res.status(404).json({ error: 'not_found' });
+  });
+  app.delete('/api/history/:id', admin, (req, res) => {
+    if (db.deleteHistory(Number(req.params.id))) res.json(db.historyList());
+    else res.status(404).json({ error: 'not_found' });
   });
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'not_found' }));

@@ -130,6 +130,44 @@ describe('API', () => {
     assert.equal(r.body.backup, null); // an in-memory database has no file to back up
   });
 
+  test('Clear All saves the tournament in History first; History is for organizers only', async () => {
+    await api.enter({ ...GROUPS_DONE, SF1: [21, 15] });
+    const cleared = await api.call('DELETE', '/api/results');
+    assert.equal(typeof cleared.body.archived, 'number');
+    assert.equal(cleared.body.progress.finished, 0);
+
+    assert.equal((await api.call('GET', '/api/history', undefined, null)).status, 401);
+    const list = await api.call('GET', '/api/history');
+    assert.equal(list.body.length, 1);
+    assert.deepEqual({ ...list.body[0], clearedAt: 'x' }, { id: cleared.body.archived, clearedAt: 'x', champion: null, finished: 10, total: 13 });
+    assert.ok(!Number.isNaN(Date.parse(list.body[0].clearedAt)));
+
+    const entry = await api.call('GET', `/api/history/${cleared.body.archived}`);
+    assert.equal(entry.body.state.progress.finished, 10);
+    assert.deepEqual(entry.body.state.matches.find((m) => m.id === 'SF1').sets, [[21, 15]]);
+    assert.equal((await api.call('GET', `/api/history/${cleared.body.archived}`, undefined, null)).status, 401);
+  });
+
+  test('History names the champion, and Clear All on an empty tournament saves nothing', async () => {
+    assert.equal((await api.call('DELETE', '/api/results')).body.archived, null);
+    assert.deepEqual((await api.call('GET', '/api/history')).body, []);
+    await api.enter({ ...GROUPS_DONE, SF1: [21, 15], SF2: [19, 21], FINAL: [[15, 12], [13, 15], [16, 14]] });
+    await api.call('DELETE', '/api/results');
+    const [only] = (await api.call('GET', '/api/history')).body;
+    assert.deepEqual([only.champion, only.finished], ['Duyên – Khải', 12]);
+  });
+
+  test('History entries can be deleted; unknown ones are not found', async () => {
+    await api.enter({ G1: [21, 15] });
+    const { archived } = (await api.call('DELETE', '/api/results')).body;
+    assert.equal((await api.call('DELETE', `/api/history/${archived}`, undefined, null)).status, 401);
+    assert.deepEqual((await api.call('DELETE', `/api/history/${archived}`)).body, []);
+    for (const id of [archived, 999, 'abc']) {
+      assert.deepEqual((await api.call('GET', `/api/history/${id}`)).body, { error: 'not_found' });
+      assert.equal((await api.call('DELETE', `/api/history/${id}`)).status, 404);
+    }
+  });
+
   test('bad requests get 404 or 422 with an error code', async () => {
     const cases = [
       ['PUT', '/api/matches/G1/sets', { sets: [[21, 20]] }, 422, 'invalid_set'],
@@ -185,6 +223,12 @@ describe('storage', () => {
       const backup = openDb(join(dir, r.body.backup));
       assert.deepEqual(backup.load().results, { G1: { kind: 'sets', data: { sets: [[21, 15]] } } });
       backup.close();
+
+      // The History entry survives a restart too.
+      const reopened = openDb(join(dir, 'tournament.db'));
+      assert.equal(reopened.historyList().length, 1);
+      assert.deepEqual(reopened.historyEntry(r.body.archived).state.matches[0].sets, [[21, 15]]);
+      reopened.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

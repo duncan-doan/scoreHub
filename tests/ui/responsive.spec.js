@@ -58,7 +58,9 @@ for (const lang of ['vi', 'en']) {
       await page.goto('/');
       await page.evaluate(([pin, l]) => (localStorage.setItem('pin', pin), localStorage.setItem('lang', l)), [PIN, lang]);
       await page.reload();
-      for (const hash of VIEWS) {
+      // Earlier files clear the tournament, which saves History entries; show the newest one too.
+      const [newest] = await (await page.request.get('/api/history', { headers: HEADERS })).json();
+      for (const hash of [...VIEWS, '#history', ...(newest ? [`#history/${newest.id}`] : [])]) {
         await page.goto(`/${hash}`);
         await expect(page.locator('main > *').first()).toBeVisible();
         // A 320px phone can't fit all five organizer menu labels; there they end in "…" (SPEC §10).

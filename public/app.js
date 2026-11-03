@@ -10,7 +10,7 @@ const POLL_IDLE_MS = 15000;
 const TAP_RETRIES = 5;
 const NOTICE_MS = 5000;
 const PUBLIC_VIEWS = ['groups', 'knockout', 'sponsors'];
-const ADMIN_VIEWS = ['admin', 'edit', 'live', 'draw', 'reset', 'login'];
+const ADMIN_VIEWS = ['admin', 'edit', 'live', 'draw', 'reset', 'history', 'login'];
 // Views with inputs: a poll must not re-render them while someone is typing.
 const FORM_VIEWS = ['edit', 'draw', 'reset', 'login'];
 
@@ -47,6 +47,11 @@ let notice = null; // { text, error, until }
 let tapping = idleTapping();
 let rendered = null; // the view last rendered, so polling can leave forms alone
 let pollTimer;
+// §5.6: organizers' History, fetched when its pages are opened (it isn't part of /api/state).
+let historyList = null; // [{ id, clearedAt, champion, finished, total }], or { error }
+const historyEntries = {}; // id → { id, clearedAt, state }, or { error }
+let historyLoading = null; // what is being fetched, so a render doesn't start it twice
+let archived = false; // true while a saved copy is drawn, so nothing in it looks live
 
 function idleTapping() {
   return { match: null, busy: false, status: null, changeEnds: false };
@@ -81,6 +86,7 @@ function sideText(m, side) {
 
 function stateText(m) {
   if (m.state === 'finished' && m.result === 'walkover') return t('walkover');
+  if (archived && m.state === 'live') return t('stateUnfinished');
   return t({ waiting: 'stateWaiting', ready: 'stateReady', live: 'stateLive', finished: 'stateFinished' }[m.state]);
 }
 
@@ -185,14 +191,15 @@ function setNotice(text, error = false) {
 
 function scoreCells(m, side) {
   const cells = m.sets.map((s) => `<span class="set">${s[side - 1]}</span>`);
-  if (m.state === 'live') cells.push(`<span class="set now">${m.current[side - 1]}</span>`);
+  if (m.state === 'live') cells.push(`<span class="set${archived ? '' : ' now'}">${m.current[side - 1]}</span>`);
   return cells.join('');
 }
 
 // extra goes under the two sides (admin buttons); mark goes in the header, before the state (the lock dot).
 function matchCard(m, extra = '', mark = '') {
+  const live = m.state === 'live' && !archived;
   const serving = (side) =>
-    m.state === 'live' && m.serve.side === side
+    live && m.serve.side === side
       ? `<span class="serve"><span class="sr">${t('serving', { court: courtText(m) })}</span></span>`
       : '';
   const row = (side) => `
@@ -201,7 +208,7 @@ function matchCard(m, extra = '', mark = '') {
       <span class="score">${scoreCells(m, side)}</span>
     </div>`;
   return `
-    <article class="match is-${m.state}" data-match="${m.id}">
+    <article class="match is-${live || m.state !== 'live' ? m.state : 'unfinished'}" data-match="${m.id}">
       <header><span>${matchText(m)}</span><span class="badge">${mark}${stateText(m)}</span></header>
       ${row(1)}${row(2)}${extra}
     </article>`;
@@ -238,7 +245,19 @@ function adminActions(m) {
     </div>`;
 }
 
+function podiumHtml() {
+  const { podium } = state;
+  if (!podium.champion && !podium.third) return '';
+  const place = (key, code) =>
+    code ? `<li class="place-${key}"><span>${t(key)}</span><strong>${esc(teamText(code))}</strong></li>` : '';
+  return `<section class="podium"><h2>${t('podiumTitle')}</h2><ol>
+      ${place('champion', podium.champion)}${place('runnerUp', podium.runnerUp)}${place('third', podium.third)}
+    </ol></section>`;
+}
+
 const back = () => `<a class="back" href="#admin">← ${t('back')}</a>`;
+const formatDate = (iso) =>
+  new Date(iso).toLocaleString(lang === 'vi' ? 'vi-VN' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 
 const ICONS = {
   facebook: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 21v-7.5H16l.4-3H13.5V8.7c0-.9.3-1.5 1.5-1.5h1.6V4.6c-.3 0-1.2-.1-2.3-.1-2.3 0-3.8 1.4-3.8 3.9v2.1H8v3h2.5V21z"/></svg>`,
@@ -250,15 +269,7 @@ const notFound = () => `${back()}<p class="note">${t('error_not_found')}</p>`;
 
 const views = {
   overview() {
-    const { podium, progress, matches } = state;
-    const place = (key, code) =>
-      code ? `<li class="place-${key}"><span>${t(key)}</span><strong>${esc(teamText(code))}</strong></li>` : '';
-    const podiumHtml =
-      podium.champion || podium.third
-        ? `<section class="podium"><h2>${t('podiumTitle')}</h2><ol>
-            ${place('champion', podium.champion)}${place('runnerUp', podium.runnerUp)}${place('third', podium.third)}
-          </ol></section>`
-        : '';
+    const { progress, matches } = state;
     const next = matches.filter((m) => m.state === 'ready').slice(0, 4);
     const latest = matches.filter((m) => m.state === 'finished').reverse().slice(0, 4);
     return `
@@ -266,13 +277,13 @@ const views = {
         <p>${t('progress', { done: progress.finished, total: progress.total })}</p>
         <div class="bar"><span style="width: ${(100 * progress.finished) / progress.total}%"></span></div>
       </section>
-      ${podiumHtml}
+      ${podiumHtml()}
       ${cardList(t('liveNow'), matches.filter((m) => m.state === 'live'), t('noLive'))}
       ${next.length ? cardList(t('upNext'), next) : ''}
       ${latest.length ? cardList(t('latest'), latest) : ''}`;
   },
 
-  groups() {
+  groups(openAll = false) {
     const cols = ['colPlayed', 'colWon', 'colLost', 'colPf', 'colPa', 'colPd'];
     const sections = Object.entries(state.groups).map(([g, group]) => {
       const qualified = (r) => group.resolved && r.rank <= 2;
@@ -296,7 +307,7 @@ const views = {
             <tbody>${rows}</tbody>
           </table></div>
           ${group.resolved ? `<p class="legend"><span class="rank-key"></span>${t('qualified')}</p>` : ''}
-          <details class="group-matches" data-matches="${g}"${openMatchLists.has(g) ? ' open' : ''}>
+          ${openAll ? '<details class="group-matches" open>' : `<details class="group-matches" data-matches="${g}"${openMatchLists.has(g) ? ' open' : ''}>`}
             <summary>${t('groupMatches', { n: matches.length })}</summary>
             <div class="cards">${matches.map((m) => matchCard(m)).join('')}</div>
           </details>
@@ -474,6 +485,31 @@ const views = {
     </div>`;
   },
 
+  // §5.6: the list of saved tournaments, newest first, or one saved copy (read-only).
+  history(id) {
+    if (id) return historyEntry(id);
+    if (historyList === null) return `<p class="empty">${t('loading')}</p>`;
+    if (historyList.error) return `<p class="note">${esc(historyList.error)}</p>`;
+    const item = (h) => {
+      const date = formatDate(h.clearedAt);
+      return `
+        <article class="match history-item" data-history="${h.id}">
+          <header><span>${esc(date)}</span><span class="badge">${t('progress', { done: h.finished, total: h.total })}</span></header>
+          <p>${h.champion ? `${t('champion')}: <strong>${esc(h.champion)}</strong>` : t('historyNoChampion')}</p>
+          <div class="actions">
+            <a class="button small" href="#history/${h.id}">${t('historyView')}</a>
+            <button type="button" class="button small danger" data-action="delete-history" data-id="${h.id}" data-date="${esc(date)}">${t('historyDelete')}</button>
+          </div>
+        </article>`;
+    };
+    return `
+      <section>
+        <h2>${t('history')}</h2>
+        <p class="hint">${t('historyHint')}</p>
+        ${historyList.length ? `<div class="cards history-list">${historyList.map(item).join('')}</div>` : `<p class="empty">${t('historyEmpty')}</p>`}
+      </section>`;
+  },
+
   // §6.3: the organizer records the order the tied teams were drawn in.
   draw(g) {
     const group = Object.hasOwn(state.groups, g) ? state.groups[g] : null;
@@ -501,6 +537,51 @@ const views = {
       </form>`;
   },
 };
+
+// One saved copy, drawn with the same pieces as the live tournament: the copy is swapped in while it renders.
+function historyEntry(id) {
+  const entry = historyEntries[id];
+  const backToList = `<a class="back" href="#history">← ${t('history')}</a>`;
+  if (!entry) return `${backToList}<p class="empty">${t('loading')}</p>`;
+  if (entry.error) return `${backToList}<p class="note">${esc(entry.error)}</p>`;
+  const date = formatDate(entry.clearedAt);
+  const current = state;
+  state = entry.state;
+  archived = true;
+  try {
+    return `
+      ${backToList}
+      <div class="admin-head">
+        <h2>${t('historyTitle', { date: esc(date) })}</h2>
+        <button type="button" class="button small danger" data-action="delete-history" data-id="${entry.id}" data-date="${esc(date)}">${t('historyDelete')}</button>
+      </div>
+      <p class="hint">${t('historyReadOnly')} ${t('progress', { done: state.progress.finished, total: state.progress.total })}.</p>
+      ${podiumHtml()}
+      ${views.knockout()}
+      ${views.groups(true)}`;
+  } finally {
+    state = current;
+    archived = false;
+  }
+}
+
+async function loadHistory(id) {
+  const key = id ?? 'list';
+  if (historyLoading === key) return;
+  historyLoading = key;
+  let r;
+  try {
+    r = await api('GET', id ? `/api/history/${id}` : '/api/history');
+  } catch {
+    r = { ok: false, data: { error: 'network' } };
+  }
+  if (r.status === 401) forgetPin();
+  const value = r.ok ? r.data : { error: errorText(r.data ?? {}) };
+  if (id) historyEntries[id] = value;
+  else historyList = value;
+  historyLoading = null;
+  render();
+}
 
 // ---------- Typed-score form ----------
 
@@ -545,10 +626,11 @@ function render({ fromPoll = false } = {}) {
   document.querySelectorAll('[data-i18n]').forEach((el) => (el.textContent = t(el.dataset.i18n)));
   document.querySelectorAll('[data-i18n-label]').forEach((el) => el.setAttribute('aria-label', t(el.dataset.i18nLabel)));
   document.querySelectorAll('[data-i18n-title]').forEach((el) => (el.title = t(el.dataset.i18nTitle)));
-  const tab = ADMIN_VIEWS.includes(view) ? 'admin' : view;
+  const tab = view === 'history' ? 'history' : ADMIN_VIEWS.includes(view) ? 'admin' : view;
   document.querySelectorAll('nav [data-view]').forEach((a) => a.classList.toggle('active', a.dataset.view === tab));
-  document.querySelector('.more-toggle').classList.toggle('active', tab === 'sponsors');
-  document.querySelector('nav [data-view="admin"]').hidden = !pin;
+  document.querySelector('.more-toggle').classList.toggle('active', tab === 'sponsors' || tab === 'history');
+  document.querySelectorAll('nav [data-admin-only]').forEach((el) => (el.hidden = !pin));
+  if (view === 'history' && (arg ? !historyEntries[arg] : historyList === null)) loadHistory(arg);
   if (!state) return;
   if (fromPoll && FORM_VIEWS.includes(view) && rendered === key) return;
 
@@ -609,6 +691,14 @@ document.addEventListener('click', async (e) => {
     setNotice(r.ok ? t('saved') : r.message, !r.ok);
     if (r.ok) location.hash = '#admin';
     else render();
+  } else if (action === 'delete-history') {
+    if (!confirm(t('confirmDeleteHistory', { date: el.dataset.date }))) return;
+    const r = await send('DELETE', `/api/history/${id}`);
+    setNotice(r.ok ? t('historyDeleted') : r.message, !r.ok);
+    delete historyEntries[id];
+    historyList = null;
+    if (location.hash === '#history') render();
+    else location.hash = '#history';
   } else if (action === 'clear') {
     if (!confirm(t('confirmClear', { match: labelOf(id) }))) return;
     const r = await send('DELETE', `/api/matches/${id}`);
@@ -637,7 +727,9 @@ document.addEventListener('submit', async (e) => {
     state = res.data;
     flipped.clear();
     remember('flipped', null);
-    setNotice(res.data.backup ? t('resetDoneBackup', { file: res.data.backup }) : t('resetDone'));
+    historyList = null;
+    const parts = [t('resetDone'), res.data.archived ? t('resetArchived') : '', res.data.backup ? t('resetBackup', { file: res.data.backup }) : ''];
+    setNotice(parts.filter(Boolean).join(' '));
     location.hash = '#admin';
     render();
     return;
@@ -675,6 +767,7 @@ document.addEventListener('input', (e) => {
 
 window.addEventListener('hashchange', () => {
   closeMore();
+  if (location.hash === '#history') historyList = null;
   if (tapping.match !== route().arg) tapping = idleTapping();
   render();
   window.scrollTo(0, 0);

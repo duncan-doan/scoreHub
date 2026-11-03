@@ -111,7 +111,7 @@ docker compose up -d
 
 ## Reset after the rehearsal
 
-On the admin page, tap **Xóa tất cả** (Clear All) and type the PIN again. A backup is saved first.
+On the admin page, tap **Xóa tất cả** (Clear All) and type the PIN again. The rehearsal is saved in **Thêm ▾ → Lịch sử** (History) and as a backup file first. Delete the rehearsal's History entry there if you don't want to keep it.
 
 ## Never on this droplet
 

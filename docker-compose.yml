@@ -1,0 +1,13 @@
+# The badminton app on the shared droplet (docs/ARCHITECTURE.md §8). The project name keeps its
+# containers apart from the other service on the same droplet. Needs Docker Compose v2.
+name: badminton
+services:
+  app:
+    build: .
+    init: true # a tiny init process passes Docker's stop signal on, so the app stops at once instead of after 10 s
+    ports:
+      - "8080:3000"
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

@@ -135,6 +135,7 @@ name: badminton
 services:
   app:
     build: .
+    init: true
     ports: ["8080:3000"]
     env_file: .env
     volumes: ["./data:/app/data"]
@@ -142,16 +143,21 @@ services:
 ```
 
 - The image installs production dependencies only (`npm ci --omit=dev`), so Playwright stays out.
+- better-sqlite3 has no ready-made binaries and compiles from source, so the Dockerfile has two stages: the first has Python, make and g++ and compiles; the second gets only the result (image about 280 MB). The compile needs 130–190 MB of free memory on the droplet; with less, add swap.
+- `init: true` passes Docker's stop signal to the app, so restarts and updates take a second instead of 10.
+- The container runs as the unprivileged `node` user (uid 1000), so `data/` on the droplet must belong to uid 1000.
 - `ADMIN_PIN` lives in `.env` on the droplet and never in git. The server won't start without a PIN of at least 6 characters.
 
 ### First deploy
+
+The exact commands are in [README.md](../README.md); in short:
 
 1. **Check the droplet:** `docker ps`, `sudo ss -tlnp` and `free -h`. Port 8080 must be free. If less than about 200 MB of memory is free, add a 1 GB swap file.
 2. **Check the office network:** run `docker run --rm -p 8080:80 nginx` on the droplet and open `http://<droplet-ip>:8080` on the office Wi-Fi. Stop it with Ctrl+C.
 3. **Firewall:** in the DigitalOcean Cloud Firewall, allow inbound 8080 from anywhere and 22 from your IP. Ports that Docker publishes ignore `ufw`, so this firewall is what controls access.
 4. **Copy the code** from your computer:
-   `rsync -av --exclude node_modules --exclude data --exclude .env ./ <user>@<droplet-ip>:/opt/badminton/`
-5. **Start it** on the droplet: create `/opt/badminton/.env` containing `ADMIN_PIN=…`, then run `cd /opt/badminton && docker compose up -d --build`.
+   `rsync -av --exclude node_modules --exclude data --exclude .env --exclude .git --exclude icons ./ <user>@<droplet-ip>:/opt/badminton/`
+5. **Start it** on the droplet: create `/opt/badminton/.env` containing `ADMIN_PIN=…`, create `data/` owned by user 1000 (the container runs as the unprivileged `node` user), then run `cd /opt/badminton && docker compose up -d --build`.
 6. **Open it:** load `http://<droplet-ip>:8080` on your phone. If Chrome warns that the connection isn't secure, tap “Continue to site” (SPEC D14).
 
 ### Update

@@ -1,0 +1,12 @@
+node_modules
+data
+.env
+.git
+icons
+docs
+tests
+test-results
+playwright-report
+playwright.config.js
+*.md
+.nvmrc

@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 300" width="980" height="300" role="img" aria-label="Group A and Group B results feed per-group standings ranked by most wins, head-to-head when exactly two are level, point difference, points scored, then draw lots. First of A meets second of B, first of B meets second of A. Semifinal winners play the final, losers play the 3rd-place match.">
+  <title>Tournament flow: groups to podium</title>
+  <style>
+    .bg{fill:#FFFFFF}
+    .box{fill:#F3F6F4;stroke:#C8D4CC;stroke-width:1.5}
+    .boxa{fill:#D7ECE0;stroke:#14744B;stroke-width:1.5}
+    .edge{stroke:#16211B;stroke-width:1.5;fill:none}
+    .edge-a{stroke:#14744B;stroke-width:2;fill:none}
+    .edge-d{stroke:#55645B;stroke-width:1.5;fill:none;stroke-dasharray:5 4}
+    .life{stroke:#C8D4CC;stroke-width:1.5;stroke-dasharray:4 5;fill:none}
+    .ah{fill:#16211B}.ah-a{fill:#14744B}.ah-m{fill:#55645B}
+    text{fill:#16211B;font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+    .tt{font-size:13px;font-weight:600}
+    .ts{font-size:11.5px}
+    .tm{font-size:11px;fill:#55645B}
+    .ta{fill:#14744B}
+    .b{font-weight:600}
+  </style>
+  <defs>
+    <marker id="f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-a" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-m" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+  <rect class="bg" width="980" height="300"/>
+
+  <rect class="box" x="20" y="30" width="180" height="100" rx="6"/>
+  <text class="tt" x="36" y="54">Group A · 3 teams</text>
+  <text class="ts" x="36" y="74">Duyên–Khải · Triều–Đạt</text>
+  <text class="ts" x="36" y="90">Nguyên–Quỳnh</text>
+  <text class="tm" x="36" y="114">3 matches · 1 set to 21</text>
+
+  <rect class="box" x="20" y="170" width="180" height="100" rx="6"/>
+  <text class="tt" x="36" y="194">Group B · 4 teams</text>
+  <text class="ts" x="36" y="214">Bảo–Miyoshi · Huệ–Trinh</text>
+  <text class="ts" x="36" y="230">An–Bích · Viễn–Đăng</text>
+  <text class="tm" x="36" y="254">6 matches · 1 set to 21</text>
+
+  <line class="edge" x1="200" y1="80" x2="261" y2="80" marker-end="url(#f)"/>
+  <text class="tm" x="231" y="72" text-anchor="middle">scores</text>
+  <line class="edge" x1="200" y1="220" x2="261" y2="220" marker-end="url(#f)"/>
+  <text class="tm" x="231" y="212" text-anchor="middle">scores</text>
+
+  <rect class="boxa" x="263" y="20" width="200" height="260" rx="6"/>
+  <text class="tt" x="279" y="44">Standings, per group</text>
+  <text class="ts b ta" x="279" y="70">1</text><text class="ts" x="295" y="70">Most wins</text>
+  <text class="ts b ta" x="279" y="92">2</text><text class="ts" x="295" y="92">Head-to-head</text>
+  <text class="tm" x="295" y="107">only if exactly 2 level</text>
+  <text class="ts b ta" x="279" y="130">3</text><text class="ts" x="295" y="130">Point difference</text>
+  <text class="ts b ta" x="279" y="152">4</text><text class="ts" x="295" y="152">Points scored</text>
+  <text class="ts b ta" x="279" y="174">5</text><text class="ts" x="295" y="174">Draw lots</text>
+  <text class="tm" x="295" y="189">if it affects 1st or 2nd</text>
+  <line class="life" x1="279" y1="208" x2="447" y2="208"/>
+  <text class="tm" x="279" y="230">3 or more level on wins:</text>
+  <text class="tm" x="279" y="246">skip step 2</text>
+
+  <line class="edge" x1="463" y1="80" x2="524" y2="80" marker-end="url(#f)"/>
+  <text class="tm" x="494" y="72" text-anchor="middle">1A · 2B</text>
+  <line class="edge" x1="463" y1="220" x2="524" y2="220" marker-end="url(#f)"/>
+  <text class="tm" x="494" y="212" text-anchor="middle">1B · 2A</text>
+
+  <rect class="box" x="526" y="30" width="170" height="100" rx="6"/>
+  <text class="tt" x="542" y="54">Semifinal 1</text>
+  <text class="ts b" x="542" y="76">1st A v 2nd B</text>
+  <text class="tm" x="542" y="96">1 set to 21</text>
+  <text class="tm" x="542" y="112">won by 2, max 30</text>
+
+  <rect class="box" x="526" y="170" width="170" height="100" rx="6"/>
+  <text class="tt" x="542" y="194">Semifinal 2</text>
+  <text class="ts b" x="542" y="216">1st B v 2nd A</text>
+  <text class="tm" x="542" y="236">1 set to 21</text>
+  <text class="tm" x="542" y="252">won by 2, max 30</text>
+
+  <line class="edge-a" x1="696" y1="66" x2="757" y2="66" marker-end="url(#g)"/>
+  <text class="tm" x="727" y="58" text-anchor="middle">winner</text>
+  <line class="edge-a" x1="696" y1="196" x2="757" y2="106" marker-end="url(#g)"/>
+  <line class="edge-d" x1="696" y1="104" x2="757" y2="194" marker-end="url(#m)"/>
+  <line class="edge-d" x1="696" y1="236" x2="757" y2="236" marker-end="url(#m)"/>
+  <text class="tm" x="727" y="254" text-anchor="middle">loser</text>
+
+  <rect class="boxa" x="759" y="30" width="200" height="100" rx="6"/>
+  <text class="tt" x="775" y="54">Final</text>
+  <text class="tm" x="775" y="72">best of 3 sets to 15</text>
+  <text class="ts b ta" x="775" y="94">Winner → Champion</text>
+  <text class="ts" x="775" y="112">Loser → Runner-up</text>
+
+  <rect class="box" x="759" y="170" width="200" height="100" rx="6"/>
+  <text class="tt" x="775" y="194">3rd-place match</text>
+  <text class="tm" x="775" y="212">best of 3 sets to 15</text>
+  <text class="ts b ta" x="775" y="234">Winner → 3rd place</text>
+  <text class="tm" x="775" y="252">sets won by 2, max 21</text>
+</svg>

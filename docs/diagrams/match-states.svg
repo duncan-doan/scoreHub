@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 270" width="980" height="270" role="img" aria-label="A knockout match waits for teams, then is ready. A ready match goes live on the first tap, or straight to finished when a score or walkover is typed. A live match finishes when it is decided; undo reopens it. Clearing returns a finished match to ready. A finished match is locked while a match that depends on it is finished.">
+  <title>Match states</title>
+  <style>
+    .bg{fill:#FFFFFF}
+    .box{fill:#F3F6F4;stroke:#C8D4CC;stroke-width:1.5}
+    .boxa{fill:#D7ECE0;stroke:#14744B;stroke-width:1.5}
+    .lock{fill:none;stroke:#9A5300;stroke-width:1.5;stroke-dasharray:4 3}
+    .edge{stroke:#16211B;stroke-width:1.5;fill:none}
+    .ah{fill:#16211B}
+    text{fill:#16211B;font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+    .tt{font-size:13px;font-weight:600}
+    .tm{font-size:11px;fill:#55645B}
+  </style>
+  <defs>
+    <marker id="f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+  <rect class="bg" width="980" height="270"/>
+
+  <rect class="box" x="20" y="100" width="170" height="50" rx="10"/>
+  <text class="tt" x="105" y="122" text-anchor="middle">Waiting for teams</text>
+  <text class="tm" x="105" y="139" text-anchor="middle">knockout only</text>
+
+  <rect class="box" x="290" y="100" width="150" height="50" rx="10"/>
+  <text class="tt" x="365" y="122" text-anchor="middle">Ready</text>
+  <text class="tm" x="365" y="139" text-anchor="middle">can be scored</text>
+
+  <rect class="boxa" x="540" y="100" width="150" height="50" rx="10"/>
+  <text class="tt" x="615" y="122" text-anchor="middle">Live</text>
+  <text class="tm" x="615" y="139" text-anchor="middle">protects its teams</text>
+
+  <rect class="box" x="790" y="100" width="150" height="50" rx="10"/>
+  <text class="tt" x="865" y="122" text-anchor="middle">Finished</text>
+  <text class="tm" x="865" y="139" text-anchor="middle">counts in standings</text>
+  <rect class="lock" x="782" y="92" width="166" height="66" rx="14"/>
+
+  <line class="edge" x1="190" y1="116" x2="288" y2="116" marker-end="url(#f)"/>
+  <text class="tm" x="239" y="108" text-anchor="middle">teams known</text>
+  <line class="edge" x1="440" y1="116" x2="538" y2="116" marker-end="url(#f)"/>
+  <text class="tm" x="489" y="108" text-anchor="middle">first +1 tap</text>
+  <line class="edge" x1="690" y1="116" x2="788" y2="116" marker-end="url(#f)"/>
+  <text class="tm" x="739" y="108" text-anchor="middle">match decided</text>
+  <line class="edge" x1="790" y1="136" x2="692" y2="136" marker-end="url(#f)"/>
+  <text class="tm" x="741" y="168" text-anchor="middle">undo</text>
+
+  <path class="edge" d="M365 100 Q615 20 863 99" marker-end="url(#f)"/>
+  <text class="tm" x="615" y="50" text-anchor="middle">typed score or walkover</text>
+  <path class="edge" d="M865 150 Q615 250 367 151" marker-end="url(#f)"/>
+  <text class="tm" x="615" y="218" text-anchor="middle">clear result</text>
+
+  <rect class="lock" x="20" y="240" width="28" height="16" rx="5"/>
+  <text class="tm" x="58" y="252">Locked while a match that depends on this one is finished: no edit, undo or clear.</text>
+</svg>

@@ -2,6 +2,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import http from 'node:http';
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,7 +41,7 @@ async function start(file = ':memory:') {
     await once(server, 'close');
     db.close();
   };
-  return { call, enter, close, tick: (ms) => (clock += ms) };
+  return { base, call, enter, close, tick: (ms) => (clock += ms) };
 }
 
 const match = (state, id) => state.matches.find((m) => m.id === id);
@@ -50,12 +51,19 @@ describe('API', () => {
   beforeEach(async () => (api = await start()));
   afterEach(() => api.close());
 
-  test('the state is public, never cached and not indexed', async () => {
+  test('the state is public, not indexed, gzipped, and checked again on every refresh', async () => {
     const r = await api.call('GET', '/api/state', undefined, null);
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.progress, { finished: 0, total: 13 });
-    assert.equal(r.headers.get('cache-control'), 'no-store');
+    assert.equal(r.headers.get('cache-control'), 'no-cache');
+    assert.equal(r.headers.get('content-encoding'), 'gzip');
     assert.match(r.headers.get('x-robots-tag'), /noindex/);
+    // A browser's cache check (plain HTTP: fetch would add Cache-Control: no-cache, which asks for a full reply).
+    const check = () =>
+      new Promise((resolve) => http.get(`${api.base}/api/state`, { headers: { 'If-None-Match': r.headers.get('etag') } }, (res) => resolve(res.resume().statusCode)));
+    assert.equal(await check(), 304);
+    await api.enter({ G1: [21, 15] });
+    assert.equal(await check(), 200);
   });
 
   test('every write needs the PIN', async () => {
@@ -154,7 +162,7 @@ describe('API', () => {
     await api.enter({ ...GROUPS_DONE, SF1: [21, 15], SF2: [19, 21], FINAL: [[15, 12], [13, 15], [16, 14]] });
     await api.call('DELETE', '/api/results');
     const [only] = (await api.call('GET', '/api/history')).body;
-    assert.deepEqual([only.champion, only.finished], ['Duyên – Khải', 12]);
+    assert.deepEqual([only.champion, only.finished], [seed.teams.find((t) => t.code === 'A1').name, 12]);
   });
 
   test('History entries can be deleted; unknown ones are not found', async () => {
@@ -166,6 +174,43 @@ describe('API', () => {
       assert.deepEqual((await api.call('GET', `/api/history/${id}`)).body, { error: 'not_found' });
       assert.equal((await api.call('DELETE', `/api/history/${id}`)).status, 404);
     }
+  });
+
+  test('fans vote while an award is open; organizers open and close it', async () => {
+    const phone1 = 'a'.repeat(32);
+    const phone2 = 'b'.repeat(32);
+    const award = (body, id = 'fan_favourite') => body.awards.find((a) => a.id === id);
+    const voteFor = (voter, team, id = 'fan_favourite') => api.call('PUT', `/api/votes/${id}`, { voter, team }, null);
+
+    assert.deepEqual([(await voteFor(phone1, 'A2')).status, (await voteFor(phone1, 'A2')).body.error], [409, 'voting_closed']);
+    assert.equal((await api.call('PUT', '/api/awards/fan_favourite', { status: 'open' }, null)).status, 401);
+    assert.equal(award((await api.call('PUT', '/api/awards/fan_favourite', { status: 'open' })).body).status, 'open');
+
+    await voteFor(phone1, 'A2');
+    await voteFor(phone1, 'B1'); // changing a vote keeps one vote per phone
+    const seen = award((await voteFor(phone2, 'B1')).body);
+    assert.deepEqual([seen.total, seen.mine, seen.results], [2, 'B1', null]);
+    assert.equal(award((await api.call('GET', `/api/votes?voter=${phone1}`, undefined, null)).body).mine, 'B1');
+
+    await api.call('PUT', '/api/awards/fan_favourite', { status: 'closed' });
+    const closed = award((await api.call('GET', '/api/votes', undefined, null)).body);
+    assert.deepEqual([closed.winners, closed.results[0]], [['B1'], { code: 'B1', votes: 2 }]);
+    assert.equal((await voteFor(phone1, 'A1')).status, 409);
+
+    const bad = [
+      ['/api/votes/fan_favourite', { voter: 'not-a-phone-id', team: 'A1' }, 422],
+      ['/api/votes/fan_favourite', { voter: phone1, team: 'Z9' }, 422],
+      ['/api/votes/most_valuable', { voter: phone1, team: 'A1' }, 404],
+    ];
+    for (const [path, body, status] of bad) assert.equal((await api.call('PUT', path, body, null)).status, status, path);
+    assert.equal((await api.call('PUT', '/api/awards/fan_favourite', { status: 'maybe' })).status, 422);
+
+    // Clear All saves the votes in History and starts them over.
+    const { archived } = (await api.call('DELETE', '/api/results')).body;
+    const saved = (await api.call('GET', `/api/history/${archived}`)).body.state.votes;
+    assert.deepEqual(saved.find((a) => a.id === 'fan_favourite').winners, ['B1']);
+    const fresh = award((await api.call('GET', `/api/votes?voter=${phone1}`, undefined, null)).body);
+    assert.deepEqual([fresh.status, fresh.total, fresh.mine], ['not_open', 0, null]);
   });
 
   test('bad requests get 404 or 422 with an error code', async () => {

@@ -1,11 +1,14 @@
 // Feature checks beyond the main tournament run (docs/SPEC.md): the Trueson logo link, sponsor links, draws,
 // locks, a refused correction and a best-of-3 match scored live. Runs first (files run in name order) and
 // leaves the tournament empty for the files after it.
-import { test, expect } from '@playwright/test';
+import { test, expect, devices } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+// Team names come from seed.json, so renaming a team (e.g. a substitution) never breaks a test.
+const NAME = Object.fromEntries(JSON.parse(readFileSync(new URL('../../server/seed.json', import.meta.url), 'utf8')).teams.map((t) => [t.code, t.name]));
 
 const PIN = 'court-21';
 const HEADERS = { 'X-Admin-Pin': PIN };
-// SPEC §6.4 Examples 1 and 3: SF1 is Duyên – Khải v Huệ – Trinh, SF2 is Bảo – Miyoshi v Nguyên – Quỳnh.
+// SPEC §6.4 Examples 1 and 3: SF1 is A1 v B2, SF2 is B1 v A3.
 const GROUPS_DONE = { G1: [21, 15], G2: [21, 19], G3: [15, 21], G4: [21, 18], G5: [10, 21], G6: [21, 5], G7: [19, 21], G8: [21, 19], G9: [21, 8] };
 // SPEC §6.4 Example 4: group A level on everything, so it needs a draw.
 const FULL_TIE_A = { G1: [21, 19], G4: [21, 19], G7: [19, 21] };
@@ -39,6 +42,44 @@ test('opening or refreshing the admin page keeps the Admin tab', async ({ page }
     await expect(page.locator('nav [data-view="admin"]')).toBeVisible();
     await expect(page.locator('nav [data-view="admin"]')).toHaveClass(/active/);
   }
+});
+
+test('fans vote on their phones; organizers open and close each award', async ({ page, browser, request }) => {
+  // Two spectators' phones (each its own browser, so each has its own vote) and the organizer's.
+  const phone = async () => (await browser.newContext({ ...devices['Pixel 7'] })).newPage();
+  const fan1 = await phone();
+  const fan2 = await phone();
+  await fan1.goto('/#vote');
+  const fanFavourite = (p) => p.locator('.award[data-award="fan_favourite"]');
+  await expect(fanFavourite(fan1)).toContainText('Ban tổ chức chưa mở bình chọn cho giải này.');
+
+  await logIn(page);
+  await page.goto('/#admin');
+  await page.locator('.award-controls li', { hasText: 'Đội được yêu thích nhất' }).getByRole('button', { name: 'Mở bình chọn' }).click();
+  await expect(page.locator('.award-controls li', { hasText: 'Đội được yêu thích nhất' })).toContainText('Đang mở');
+
+  await fan1.reload();
+  await fanFavourite(fan1).getByRole('button', { name: NAME.A2 }).click();
+  await expect(fanFavourite(fan1)).toContainText(`Bạn đã chọn ${NAME.A2}.`);
+  await fanFavourite(fan1).getByRole('button', { name: NAME.B1 }).click(); // changes the vote
+  await expect(fanFavourite(fan1).getByRole('button', { name: NAME.B1 })).toHaveAttribute('aria-pressed', 'true');
+  await expect(fanFavourite(fan1)).toContainText('Số phiếu: 1');
+  await fan2.goto('/#vote');
+  await fanFavourite(fan2).getByRole('button', { name: NAME.B1 }).click();
+  await expect(fanFavourite(fan2)).toContainText('Số phiếu: 2');
+  await expect(fanFavourite(fan2).locator('.vote-results')).toHaveCount(0); // counts stay hidden while open
+
+  await page.reload();
+  await page.locator('.award-controls li', { hasText: 'Đội được yêu thích nhất' }).getByRole('button', { name: 'Đóng bình chọn' }).click();
+  for (const fan of [fan1, fan2]) {
+    await fan.reload();
+    await expect(fanFavourite(fan).locator('.vote-headline')).toHaveText(`Đội thắng: ${NAME.B1}`);
+    await expect(fanFavourite(fan).locator('.vote-results li.winner .n')).toHaveText('2');
+  }
+  await expect(fan1.locator('.award[data-award="best_rally"]')).toContainText('Chưa mở');
+  await fan1.context().close();
+  await fan2.context().close();
+  expect((await request.put('/api/awards/fan_favourite', { headers: HEADERS, data: { status: 'not_open' } })).ok()).toBe(true);
 });
 
 test('the Trueson logo leads back to Overview', async ({ page }) => {
@@ -102,20 +143,20 @@ test('an organizer records the draw for a full tie', async ({ page, request }) =
   await enter(request, { ...GROUPS_DONE, ...FULL_TIE_A });
   await logIn(page);
   await page.goto('/#admin');
-  await expect(page.locator('.note-row')).toContainText('Cần bốc thăm giữa Duyên – Khải, Triều – Đạt, Nguyên – Quỳnh.');
+  await expect(page.locator('.note-row')).toContainText(`Cần bốc thăm giữa ${NAME.A1}, ${NAME.A2}, ${NAME.A3}.`);
   await page.getByRole('link', { name: 'Nhập kết quả bốc thăm' }).click();
-  await page.getByLabel('Hạng 1').selectOption({ label: 'Nguyên – Quỳnh' });
-  await page.getByLabel('Hạng 2').selectOption({ label: 'Duyên – Khải' });
-  await page.getByLabel('Hạng 3').selectOption({ label: 'Triều – Đạt' });
+  await page.getByLabel('Hạng 1').selectOption({ label: `${NAME.A3}` });
+  await page.getByLabel('Hạng 2').selectOption({ label: `${NAME.A1}` });
+  await page.getByLabel('Hạng 3').selectOption({ label: `${NAME.A2}` });
   await page.getByRole('button', { name: 'Lưu kết quả bốc thăm' }).click();
   await expect(page).toHaveURL(/#admin$/);
   await page.goto('/#groups');
-  await expect(page.locator('[data-group="A"] tbody .team .name')).toHaveText(['Nguyên – Quỳnh', 'Duyên – Khải', 'Triều – Đạt']);
-  await expect(page.locator('[data-group="A"] .note')).toHaveText('Thứ tự giữa Duyên – Khải, Triều – Đạt, Nguyên – Quỳnh theo kết quả bốc thăm.');
+  await expect(page.locator('[data-group="A"] tbody .team .name')).toHaveText([`${NAME.A3}`, `${NAME.A1}`, `${NAME.A2}`]);
+  await expect(page.locator('[data-group="A"] .note')).toHaveText(`Thứ tự giữa ${NAME.A1}, ${NAME.A2}, ${NAME.A3} theo kết quả bốc thăm.`);
 });
 
 test('a finished semifinal locks the groups until it is cleared', async ({ page, request }) => {
-  await enter(request, { SF1: [21, 15] }); // after the draw above, SF1 is Nguyên – Quỳnh v Huệ – Trinh
+  await enter(request, { SF1: [21, 15] }); // after the draw above, SF1 is A3 v B2
   await logIn(page);
   await page.goto('/#admin');
   // In the list: a red dot, the reason on hover, and one explanation at the bottom of the page.
@@ -128,10 +169,18 @@ test('a finished semifinal locks the groups until it is cleared', async ({ page,
   await expect(page.locator('.locked')).toHaveText('Đã khóa vì Bán kết 1 đã có kết quả.');
   await expect(page.locator('form[data-form="sets"]')).toHaveCount(0);
 
-  page.once('dialog', (dialog) => dialog.accept());
   await page.goto('/#edit/SF1');
   await page.getByRole('button', { name: 'Xóa kết quả' }).click();
-  await expect(page.locator('.notice')).toHaveText('Đã lưu.');
+  // The confirmation is in the page (in-app browsers can block the browser's own pop-up); Cancel keeps it.
+  await expect(page.locator('.confirm')).toContainText('Xóa kết quả của Bán kết 1?');
+  await page.getByRole('button', { name: 'Hủy' }).click();
+  await expect(page.locator('[data-match="SF1"] .badge')).toHaveText('Đã xong');
+  await page.getByRole('button', { name: 'Xóa kết quả' }).click();
+  await page.getByRole('button', { name: 'Xác nhận' }).click();
+  await expect(page.locator('.notice')).toHaveText('Đã xóa kết quả.');
+  await expect(page.locator('.notice')).toBeInViewport();
+  await expect(page.locator('[data-match="SF1"] .badge')).toHaveText('Chưa đấu');
+  await expect(page.getByRole('button', { name: 'Xóa kết quả' })).toHaveCount(0);
   await page.goto('/#edit/G1');
   await expect(page.locator('form[data-form="sets"]')).toBeVisible();
 });
@@ -158,10 +207,10 @@ test("a correction that would change a live semifinal's teams is refused", async
 });
 
 test('a best-of-3 final scored live: ends change between sets and at 8 in the decider', async ({ page, request }) => {
-  await enter(request, { SF1: [21, 15], SF2: [19, 21] }); // the final is Duyên – Khải v Nguyên – Quỳnh
+  await enter(request, { SF1: [21, 15], SF2: [19, 21] }); // the final is A1 v A3
   await logIn(page);
   await page.goto('/#live/FINAL');
-  await page.getByRole('button', { name: 'Nguyên – Quỳnh giao trước' }).click();
+  await page.getByRole('button', { name: `${NAME.A3} giao trước` }).click();
   await page.getByRole('button', { name: 'Đổi đội giao trước' }).click(); // the toss went the other way
   const side = (s) => page.locator(`.court[data-side="${s}"]`);
   const names = page.locator('.court .name');
@@ -172,23 +221,23 @@ test('a best-of-3 final scored live: ends change between sets and at 8 in the de
   };
   await expect(side(1)).toContainText('Giao cầu · ô phải');
 
-  // Set 1 to Duyên – Khải: ends change, the panels swap, and the set winner serves first.
+  // Set 1 to A1: ends change, the panels swap, and the set winner serves first.
   for (let n = 1; n <= 14; n++) await point(1, n);
   await side(1).click();
   await expect(overlay).toContainText('Đổi sân!');
   await overlay.click();
-  await expect(names).toHaveText(['Nguyên – Quỳnh', 'Duyên – Khải']);
+  await expect(names).toHaveText([`${NAME.A3}`, `${NAME.A1}`]);
   await expect(side(1)).toContainText('Thắng 1 séc');
   await expect(side(1)).toContainText('Giao cầu · ô phải');
   await expect(page.locator('.history')).toHaveText('15–0');
 
-  // Set 2 to Nguyên – Quỳnh: ends change again.
+  // Set 2 to A3: ends change again.
   for (let n = 1; n <= 14; n++) await point(2, n);
   await side(2).click();
   await overlay.click();
-  await expect(names).toHaveText(['Duyên – Khải', 'Nguyên – Quỳnh']);
+  await expect(names).toHaveText([`${NAME.A1}`, `${NAME.A3}`]);
 
-  // Deciding set: at 7-7 the first side to reach 8 changes ends; then Duyên – Khải wins it.
+  // Deciding set: at 7-7 the first side to reach 8 changes ends; then A1 wins it.
   for (let n = 1; n <= 7; n++) {
     await point(1, n);
     await point(2, n);
@@ -197,7 +246,7 @@ test('a best-of-3 final scored live: ends change between sets and at 8 in the de
   await expect(overlay).toBeVisible();
   await overlay.click();
   for (let n = 9; n <= 15; n++) await point(1, n);
-  await expect(page.locator('.result')).toHaveText('Duyên – Khải thắng');
+  await expect(page.locator('.result')).toHaveText(`${NAME.A1} thắng`);
   await expect(page.locator('.history')).toHaveText('15–0 · 0–15 · 15–7');
   await expect(side(1)).toBeDisabled();
 

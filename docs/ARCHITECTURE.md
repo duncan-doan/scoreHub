@@ -12,9 +12,10 @@ The app is one Docker container on the DigitalOcean droplet that already runs an
 
 | Part | Built with | Job |
 |---|---|---|
-| Web pages | Plain HTML, CSS, JS; no build step | Overview, groups, knockout, score entry; language switch remembered per browser. The browser loads the same `rules.js` (served at `/rules.js`) for the winner preview while a score is typed |
+| Web pages | Plain HTML, CSS, JS; no build step | Overview, groups, knockout, score entry, votes, History; language switch remembered per browser. The browser loads the same `rules.js` (served at `/rules.js`) for the winner preview while a score is typed |
 | Server | Node.js + Express | Serves the pages and the JSON API; checks the admin PIN and locks out repeated wrong guesses |
 | Rules engine | One JS module, tested with `node --test` | Score validation, live sets and serving, standings, tiebreaks, locks, bracket, podium |
+| Votes | `server/votes.js`, pure | Turns the vote counts into what each phone sees: totals, its own choice, and the winners once an award is closed |
 | Database | SQLite via better-sqlite3 | One file; holds only what people enter |
 | Config | `server/seed.json`, `.env` | Teams, groups and match order from the spreadsheet; the admin PIN |
 | Container | Docker + docker compose | Port 8080 → 3000, data folder mounted from the droplet, restarts after reboots |
@@ -30,6 +31,7 @@ Only what people enter is stored. Everything else is computed on every request, 
 | Live data: who served first, the point list | Live score, serving side and court |
 | Walkover winners | Wins, PF, PA, PD, tiebreaks, ranks |
 | Draw-lot order for a tied group | Qualifiers, knockout pairings, podium, progress |
+| One vote per award per phone, and each award's status | Vote totals, counts per team, winners |
 
 ```sql
 CREATE TABLE results (
@@ -48,9 +50,24 @@ CREATE TABLE draws (
 CREATE TABLE history (         -- SPEC §5.6: one row per Clear All
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   cleared_at TEXT NOT NULL,      -- server time, UTC
-  state      TEXT NOT NULL       -- JSON: the computed tournament, as /api/state returned it then
+  state      TEXT NOT NULL       -- JSON: the computed tournament, as /api/state returned it then, plus the votes
+);
+
+CREATE TABLE votes (           -- SPEC §5.7: a changed vote replaces the phone's earlier one
+  award      TEXT NOT NULL,      -- best_rally, fan_favourite, fair_play
+  voter      TEXT NOT NULL,      -- 32 hex characters, made by the browser and kept in localStorage
+  team_code  TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (award, voter)
+);
+
+CREATE TABLE awards (          -- no row means not_open
+  award  TEXT PRIMARY KEY,
+  status TEXT NOT NULL CHECK (status IN ('not_open', 'open', 'closed'))
 );
 ```
+
+All tables are created when the server starts, so an update needs no migration step. Clear All empties results, draws, votes and awards in one transaction, after saving the History row.
 
 | `kind` | `data` |
 |---|---|
@@ -79,7 +96,9 @@ Typed scores, walkovers, serve changes, clearing and draws are each one request:
 
 ### 4.3 Spectators
 
-Pages poll `GET /api/state` every 3 s while any match is live, every 15 s otherwise, and only while the tab is visible. The response is the whole computed tournament, a few kilobytes.
+Pages poll `GET /api/state` every 3 s while any match is live, every 15 s otherwise, and only while the tab is visible. The response is the whole computed tournament: 5.6 KB of JSON, sent gzipped as about 1 KB. It carries an ETag with `Cache-Control: no-cache`, so the browser asks again each time and gets an empty 304 when nothing has changed. The Vote page and the admin page also fetch `GET /api/votes` on each refresh.
+
+Measured on a laptop with the final live and a rally every 10 s: 300 spectators polling every 3 s make 100 requests a second at about 12% of one CPU core, with replies in 1.4 ms (p50) and 3.6 ms (p99). Traffic is 0.42 Mbit/s in total, about 0.6 MB per spectator per hour. A first visit downloads about 200 KB, mostly the logos, and later visits revalidate the files instead of downloading them again.
 
 ## 5. Tournament flow
 
@@ -110,6 +129,7 @@ badminton/
 │   ├── db.js               SQLite setup and queries
 │   ├── rules.js            rules engine (pure)
 │   ├── rules.test.js       node --test, one test per SPEC rule and example
+│   ├── votes.js            the three awards: what each phone sees (pure)
 │   ├── backup.js           safe copy of the database
 │   └── seed.json           7 teams, 13 matches
 ├── public/
@@ -121,7 +141,7 @@ badminton/
 │   ├── sponsors/           small web copies of the sponsors' logos
 │   └── styles.css          brand colours in the first block
 ├── tests/ui/               Playwright checks (dev-only), run in name order against server.js (an empty app):
-│   ├── features.spec.js    logo link, sponsor links, draws, locks, a refused correction, a live best of 3
+│   ├── features.spec.js    logo link, sponsor links, draws, locks, a refused correction, a live best of 3, voting from two phones
 │   ├── responsive.spec.js  every page at 17 sizes, upright and sideways, in both languages
 │   └── tournament.spec.js  a whole tournament on a phone, sideways live scoring, sponsors, clear all
 ├── playwright.config.js    phone-sized Chromium, port 3100
@@ -204,6 +224,7 @@ Don't run `docker system prune` in any form, and don't run `docker compose down`
 | Medium | Docker-published ports ignore `ufw` | Access is controlled with the DigitalOcean Cloud Firewall. |
 | Medium | Not enough memory on a shared 512 MB droplet | Check with `free -h`; add swap. The app needs under 100 MB. |
 | Medium | Losing the database | `npm run backup` after each match day, copied off the droplet; DigitalOcean droplet backups as a second copy. |
+| Low | Someone votes many times from different browsers | Accepted (SPEC D32): one vote per browser stops accidents only. The awards are for fun; organizers can compare with the room. |
 | Low | Someone guesses the PIN | 6+ characters, plus a 15-minute lockout after 10 wrong tries (SPEC §9). |
 | Low | The lockout hits the venue's shared Wi-Fi address | Restart the container to clear it, or switch to mobile data. |
 | Low | PIN sent unencrypted over HTTP | Use a PIN that isn't used anywhere else, and change it after the event. |

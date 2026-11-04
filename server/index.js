@@ -2,9 +2,11 @@
 import express from 'express';
 import { readFileSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { applyChange, computeState, RuleError } from './rules.js';
 import { openDb } from './db.js';
+import { AWARDS, AWARD_STATUSES, voteSummary } from './votes.js';
 
 const LOCKOUT_MS = 15 * 60 * 1000;
 const MAX_WRONG_PINS = 10;
@@ -73,7 +75,16 @@ export function createApp({ db, seed, pin, now = Date.now }) {
     next();
   });
 
-  app.get('/api/state', (req, res) => res.json(state()));
+  // Every phone polls this (every 3 s while a match is live), so keep the traffic small: the browser keeps
+  // its last copy and checks it with the ETag ("no-cache" = store, but always ask), getting an empty
+  // 304 when nothing changed; when it did change, the JSON goes gzipped (5.6 KB becomes about 1 KB).
+  app.get('/api/state', (req, res) => {
+    const body = JSON.stringify(state());
+    res.set({ 'Cache-Control': 'no-cache', ETag: `"${createHash('sha1').update(body).digest('base64url')}"`, Vary: 'Accept-Encoding' });
+    res.type('json');
+    if (req.acceptsEncodings('gzip')) res.set('Content-Encoding', 'gzip').send(gzipSync(body));
+    else res.send(body);
+  });
   app.post('/api/login', admin, (req, res) => res.status(204).end());
   app.put('/api/matches/:id/sets', admin, write((p, b) => ({ type: 'sets', match: p.id, sets: b.sets })));
   app.put('/api/matches/:id/serve', admin, write((p, b) => ({ type: 'serve', match: p.id, side: b.side })));
@@ -88,14 +99,37 @@ export function createApp({ db, seed, pin, now = Date.now }) {
     const backup = db.snapshot();
     const archived = db.transaction(() => {
       const { results, draws } = db.load();
-      const entered = Object.keys(results).length > 0 || Object.keys(draws).length > 0;
-      const id = entered ? db.archive(computeState(seed, results, draws)) : null;
+      const votes = voteSummary({ teams: seed.teams, ...db.votesInput(null), reveal: true });
+      const voted = votes.some((a) => a.total > 0 || a.status !== 'not_open');
+      const entered = Object.keys(results).length > 0 || Object.keys(draws).length > 0 || voted;
+      const id = entered ? db.archive({ ...computeState(seed, results, draws), votes }) : null;
       db.clearAll();
       return id;
     });
     res.json({ ...state(), backup, archived });
   });
   app.get('/api/history', admin, (req, res) => res.json(db.historyList()));
+
+  // §5.7: fan votes. Anyone can vote while an award is open; organizers open and close the awards.
+  const VOTER = /^[0-9a-f]{32}$/; // the random id each phone makes for itself
+  const votes = (voter) => ({ awards: voteSummary({ teams: seed.teams, ...db.votesInput(voter) }) });
+  app.get('/api/votes', (req, res) => res.json(votes(VOTER.test(req.query.voter) ? req.query.voter : null)));
+  app.put('/api/votes/:award', (req, res) => {
+    const { voter, team } = req.body ?? {};
+    if (!AWARDS.includes(req.params.award)) return res.status(404).json({ error: 'not_found' });
+    if (!VOTER.test(voter ?? '') || !seed.teams.some((t) => t.code === team)) return res.status(422).json({ error: 'invalid_input' });
+    const status = db.votesInput(null).statuses[req.params.award] ?? 'not_open';
+    if (status !== 'open') return res.status(409).json({ error: 'voting_closed', ...votes(voter) });
+    db.vote(req.params.award, voter, team);
+    res.json(votes(voter));
+  });
+  app.put('/api/awards/:award', admin, (req, res) => {
+    const status = req.body?.status;
+    if (!AWARDS.includes(req.params.award)) return res.status(404).json({ error: 'not_found' });
+    if (!AWARD_STATUSES.includes(status)) return res.status(422).json({ error: 'invalid_input' });
+    db.setAwardStatus(req.params.award, status);
+    res.json(votes(null));
+  });
   app.get('/api/history/:id', admin, (req, res) => {
     const entry = db.historyEntry(Number(req.params.id));
     if (entry) res.json(entry);

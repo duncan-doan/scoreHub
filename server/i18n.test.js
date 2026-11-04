@@ -9,7 +9,7 @@ const placeholders = (s) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort(
 const ERROR_CODES = [
   'wrong_pin', 'too_many_attempts', 'not_found', 'locked', 'pairing_change', 'count_mismatch', 'match_decided',
   'teams_unknown', 'has_result', 'no_server', 'nothing_to_undo', 'no_draw_needed', 'invalid_input', 'invalid_set',
-  'extra_set', 'incomplete', 'draw_mismatch', 'server_error', 'network',
+  'extra_set', 'incomplete', 'draw_mismatch', 'voting_closed', 'server_error', 'network',
 ];
 
 test('Vietnamese and English have the same keys', () => {

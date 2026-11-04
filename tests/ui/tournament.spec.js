@@ -1,6 +1,9 @@
 // Plays a whole tournament on a phone-sized screen in both languages, with one match scored live
 // (docs/ARCHITECTURE.md §9, step 4). Runs against tests/ui/server.js, which starts empty.
 import { test, expect, devices } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+// Team names come from seed.json, so renaming a team (e.g. a substitution) never breaks a test.
+const NAME = Object.fromEntries(JSON.parse(readFileSync(new URL('../../server/seed.json', import.meta.url), 'utf8')).teams.map((t) => [t.code, t.name]));
 
 const PIN = 'court-21';
 // The browser type is fixed in playwright.config.js, so only the screen settings are taken here.
@@ -30,16 +33,16 @@ test.describe('a phone turned sideways', () => {
     await page.evaluate((pin) => localStorage.setItem('pin', pin), PIN);
     await page.goto('/#live/G1');
     await page.reload();
-    await page.getByRole('button', { name: 'Duyên – Khải giao trước' }).click();
+    await page.getByRole('button', { name: `${NAME.A1} giao trước` }).click();
     await page.locator('.court[data-side="1"]').click();
     await expect(page.locator('.court[data-side="1"] .big')).toHaveText('1');
     const swap = page.getByRole('button', { name: 'Đổi sân', exact: true });
     for (const el of [page.locator('.court[data-side="1"]'), page.locator('.court[data-side="2"]'), page.getByRole('button', { name: 'Hoàn tác' }), swap]) {
       await expect(el).toBeInViewport({ ratio: 1 });
     }
-    await expect(page.locator('.court .name')).toHaveText(['Duyên – Khải', 'Triều – Đạt']);
+    await expect(page.locator('.court .name')).toHaveText([`${NAME.A1}`, `${NAME.A2}`]);
     await swap.click();
-    await expect(page.locator('.court .name')).toHaveText(['Triều – Đạt', 'Duyên – Khải']);
+    await expect(page.locator('.court .name')).toHaveText([`${NAME.A2}`, `${NAME.A1}`]);
     // Leave the tournament empty for the next test.
     expect((await request.delete('/api/matches/G1', { headers: { 'X-Admin-Pin': PIN } })).ok()).toBe(true);
   });
@@ -79,7 +82,8 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
     await page.goto('/#edit/G1');
     await page.locator('input[name="s0-1"]').fill('21');
     await page.locator('input[name="s0-2"]').fill('20');
-    await expect(page.locator('.preview')).toHaveText('Set 1 is not a valid score.');
+    await expect(page.locator('.preview')).toHaveText('Set 1: must be won by 2 points. From 20–20, play goes on until one side leads by 2.');
+    await expect(page.getByRole('button', { name: 'Save result' })).toBeDisabled();
   });
 
   await test.step('typing all nine group scores', async () => {
@@ -88,17 +92,17 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
 
   await test.step('standings, qualifiers and semifinal pairings', async () => {
     await page.getByRole('link', { name: 'Groups' }).click();
-    await expect(standings(page, 'A')).toHaveText(['Duyên – Khải', 'Nguyên – Quỳnh', 'Triều – Đạt']);
-    await expect(standings(page, 'B')).toHaveText(['Bảo – Miyoshi', 'Huệ – Trinh', 'Viễn – Đăng', 'An – Bích']);
+    await expect(standings(page, 'A')).toHaveText([`${NAME.A1}`, `${NAME.A3}`, `${NAME.A2}`]);
+    await expect(standings(page, 'B')).toHaveText([`${NAME.B1}`, `${NAME.B2}`, `${NAME.B4}`, `${NAME.B3}`]);
     await expect(page.locator('[data-group="A"] tr.qualified')).toHaveCount(2);
     await page.getByRole('link', { name: 'Knockout' }).click();
-    await expect(page.locator('[data-match="SF1"]')).toContainText('Duyên – Khải');
-    await expect(page.locator('[data-match="SF1"]')).toContainText('Huệ – Trinh');
+    await expect(page.locator('[data-match="SF1"]')).toContainText(`${NAME.A1}`);
+    await expect(page.locator('[data-match="SF1"]')).toContainText(`${NAME.B2}`);
   });
 
   await test.step('scoring SF1 live, with undo, the change-ends reminder and a spectator watching', async () => {
     await page.goto('/#live/SF1');
-    await page.getByRole('button', { name: 'Duyên – Khải serves first' }).click();
+    await page.getByRole('button', { name: `${NAME.A1} serves first` }).click();
     const [side1, side2] = [1, 2].map((s) => page.locator(`.court[data-side="${s}"]`));
     await expect(side1).toContainText('Serving · right court');
     await side2.click();
@@ -115,7 +119,7 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
         await expect(page.locator('.overlay')).toContainText('Change ends!');
         await page.locator('.overlay').click();
         // The teams changed ends on court, so the screen swaps its panels.
-        await expect(page.locator('.court .name')).toHaveText(['Huệ – Trinh', 'Duyên – Khải']);
+        await expect(page.locator('.court .name')).toHaveText([`${NAME.B2}`, `${NAME.A1}`]);
       }
       await expect(side1.locator('.big')).toHaveText(String(n));
       if (n === 3) {
@@ -125,7 +129,7 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
       }
       if (n === 6) await expect(spectatorScore()).toHaveText('6', { timeout: 10_000 }); // picked up by polling
     }
-    await expect(page.locator('.result')).toHaveText('Duyên – Khải wins');
+    await expect(page.locator('.result')).toHaveText(`${NAME.A1} wins`);
     await spectator.close();
   });
 
@@ -136,7 +140,9 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
     await expect(page.locator('[data-match="G1"] .lock-dot')).toHaveAttribute('title', 'Đã khóa vì Bán kết 1, Bán kết 2 đã có kết quả.');
     await typeScore(page, 'FINAL', [[15, 12], [13, 15], [16, 14]], 'Lưu kết quả');
     await page.goto('/#edit/THIRD');
-    await page.getByRole('button', { name: 'Bảo – Miyoshi thắng W/O' }).click();
+    await page.getByRole('button', { name: `${NAME.B1} thắng W/O` }).click();
+    await expect(page.locator('.confirm')).toContainText(`Ghi nhận ${NAME.B1} thắng W/O?`);
+    await page.getByRole('button', { name: 'Xác nhận' }).click();
     await expect(page).toHaveURL(/#admin$/);
     await expect(page.locator('[data-match="THIRD"] .badge')).toHaveText('W/O');
   });
@@ -145,7 +151,7 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
     await page.getByRole('button', { name: 'Đăng xuất' }).click();
     await expect(page.getByRole('link', { name: 'Quản lý' })).toBeHidden();
     await expect(page.getByText('Đã đấu 13/13 trận')).toBeVisible();
-    await expect(page.locator('.podium li')).toHaveText([/Vô địch\s*Duyên – Khải/, /Giải Nhì\s*Nguyên – Quỳnh/, /Giải Ba\s*Bảo – Miyoshi/]);
+    await expect(page.locator('.podium li')).toHaveText([new RegExp(`Vô địch\\s*${NAME.A1}`), new RegExp(`Giải Nhì\\s*${NAME.A3}`), new RegExp(`Giải Ba\\s*${NAME.B1}`)]);
     // Gold, silver and bronze.
     const colours = await page.locator('.podium li').evaluateAll((items) => items.map((li) => getComputedStyle(li).backgroundColor));
     expect(colours).toEqual(['rgb(226, 196, 106)', 'rgb(212, 216, 221)', 'rgb(217, 166, 121)']);
@@ -160,7 +166,7 @@ test('sponsors: logos next to the Trueson logo, and a page under More', async ({
 
   await page.getByRole('button', { name: 'Thêm' }).click();
   await expect(page.locator('.more-menu')).toBeVisible();
-  await expect(page.locator('.more-menu a:visible')).toHaveText(['Nhà tài trợ']); // History is for organizers only
+  await expect(page.locator('.more-menu a:visible')).toHaveText(['Nhà tài trợ', 'Bình chọn']); // History is for organizers only
   await page.keyboard.press('Escape');
   await expect(page.locator('.more-menu')).toBeHidden();
 
@@ -207,18 +213,18 @@ test('clearing every result needs the PIN typed again', async ({ page }) => {
   await page.getByRole('button', { name: 'Thêm' }).click();
   await page.locator('.more-menu').getByRole('link', { name: 'Lịch sử' }).click();
   const newest = page.locator('.history-item').first();
-  await expect(newest).toContainText('Vô địch: Duyên – Khải');
+  await expect(newest).toContainText(`Vô địch: ${NAME.A1}`);
   await expect(newest).toContainText('Đã đấu 13/13 trận');
   const entries = await page.locator('.history-item').count();
   await newest.getByRole('link', { name: 'Xem' }).click();
-  await expect(page.locator('.podium li')).toHaveText([/Vô địch\s*Duyên – Khải/, /Giải Nhì\s*Nguyên – Quỳnh/, /Giải Ba\s*Bảo – Miyoshi/]);
+  await expect(page.locator('.podium li')).toHaveText([new RegExp(`Vô địch\\s*${NAME.A1}`), new RegExp(`Giải Nhì\\s*${NAME.A3}`), new RegExp(`Giải Ba\\s*${NAME.B1}`)]);
   await expect(page.locator('[data-match="FINAL"] .side').first()).toContainText('151316');
-  await expect(page.locator('[data-group="B"] tbody .team .name')).toHaveText(['Bảo – Miyoshi', 'Huệ – Trinh', 'Viễn – Đăng', 'An – Bích']);
+  await expect(page.locator('[data-group="B"] tbody .team .name')).toHaveText([`${NAME.B1}`, `${NAME.B2}`, `${NAME.B4}`, `${NAME.B3}`]);
   await expect(page.locator('main a[href^="#edit"], main a[href^="#live"], main form')).toHaveCount(0); // nothing editable
 
   // Deleting it, after confirming.
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Xóa bản lưu' }).click();
+  await page.getByRole('button', { name: 'Xác nhận' }).click();
   await expect(page).toHaveURL(/#history$/);
   await expect(page.getByText('Đã xóa bản lưu.')).toBeVisible();
   await expect(page.locator('.history-item')).toHaveCount(entries - 1);

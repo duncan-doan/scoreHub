@@ -111,7 +111,7 @@ docker compose up -d
 
 ## Reset after the rehearsal
 
-On the admin page, tap **Xóa tất cả** (Clear All) and type the PIN again. The rehearsal is saved in **Thêm ▾ → Lịch sử** (History) and as a backup file first. Delete the rehearsal's History entry there if you don't want to keep it.
+On the admin page, tap **Xóa tất cả** (Clear All) and type the PIN again. The rehearsal is saved in **Thêm ▾ → Lịch sử** (History) and as a backup file first. Delete the rehearsal's History entry there if you don't want to keep it. Clear All also removes every vote and sets the three awards back to “not open yet”.
 
 ## Never on this droplet
 

@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { FORMATS, isFinishedSet, checkSets, liveScore, computeState, applyChange } from './rules.js';
+import { FORMATS, isFinishedSet, setProblem, checkSets, liveScore, computeState, applyChange } from './rules.js';
 
 const seed = JSON.parse(readFileSync(new URL('./seed.json', import.meta.url), 'utf8'));
 const ONE_SET = FORMATS.group;
@@ -49,7 +49,21 @@ describe('§4 valid scores', () => {
     assert.deepEqual(checkSets([[10, 15], [14, 16]], BEST_OF_3), { winner: 2, setsWon: [0, 2] });
     assert.throws(() => checkSets([[15, 10], [15, 8], [15, 3]], BEST_OF_3), { code: 'extra_set', details: { set: 3 } });
     assert.throws(() => checkSets([[15, 10]], BEST_OF_3), { code: 'incomplete' });
-    assert.throws(() => checkSets([[15, 14], [15, 10]], BEST_OF_3), { code: 'invalid_set', details: { set: 1 } });
+    assert.throws(() => checkSets([[15, 14], [15, 10]], BEST_OF_3), {
+      code: 'invalid_set',
+      details: { set: 1, reason: 'lead', to: 15, max: 21 },
+    });
+  });
+
+  test('an invalid set says which rule it breaks', () => {
+    const reasons = (format, cases) => Object.fromEntries(cases.map((s) => [s.join('-'), setProblem(s, format)]));
+    assert.deepEqual(reasons(ONE_SET, [[21, 21], [20, 18], [21, 20], [22, 21], [23, 20], [30, 27], [31, 29], [30, 28], [21, 19]]), {
+      '21-21': 'level', '20-18': 'short', '21-20': 'lead', '22-21': 'lead', '23-20': 'too_far', '30-27': 'too_far',
+      '31-29': 'over_max', '30-28': null, '21-19': null,
+    });
+    assert.deepEqual(reasons(BEST_OF_3, [[14, 14], [13, 11], [15, 14], [16, 13], [21, 18], [22, 20], [21, 20]]), {
+      '14-14': 'level', '13-11': 'short', '15-14': 'lead', '16-13': 'too_far', '21-18': 'too_far', '22-20': 'over_max', '21-20': null,
+    });
   });
 
   test('one-set matches take exactly one set', () => {

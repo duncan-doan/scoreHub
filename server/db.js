@@ -27,6 +27,17 @@ export function openDb(file = DB_FILE) {
       cleared_at TEXT NOT NULL,
       state      TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS votes (
+      award      TEXT NOT NULL,
+      voter      TEXT NOT NULL,
+      team_code  TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (award, voter)
+    );
+    CREATE TABLE IF NOT EXISTS awards (
+      award  TEXT PRIMARY KEY,
+      status TEXT NOT NULL CHECK (status IN ('not_open', 'open', 'closed'))
+    );
   `);
   const q = {
     results: db.prepare('SELECT match_id, kind, data FROM results'),
@@ -44,6 +55,15 @@ export function openDb(file = DB_FILE) {
     history: db.prepare('SELECT id, cleared_at, state FROM history ORDER BY id DESC'),
     historyEntry: db.prepare('SELECT id, cleared_at, state FROM history WHERE id = ?'),
     deleteHistory: db.prepare('DELETE FROM history WHERE id = ?'),
+    statuses: db.prepare('SELECT award, status FROM awards'),
+    putStatus: db.prepare('INSERT INTO awards (award, status) VALUES (?, ?) ON CONFLICT (award) DO UPDATE SET status = excluded.status'),
+    counts: db.prepare('SELECT award, team_code, COUNT(*) AS n FROM votes GROUP BY award, team_code'),
+    mine: db.prepare('SELECT award, team_code FROM votes WHERE voter = ?'),
+    putVote: db.prepare(`
+      INSERT INTO votes (award, voter, team_code, updated_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT (award, voter) DO UPDATE SET team_code = excluded.team_code, updated_at = excluded.updated_at`),
+    clearVotes: db.prepare('DELETE FROM votes'),
+    clearStatuses: db.prepare('DELETE FROM awards'),
   };
 
   return {
@@ -66,6 +86,8 @@ export function openDb(file = DB_FILE) {
       db.transaction(() => {
         q.clearResults.run();
         q.clearDraws.run();
+        q.clearVotes.run();
+        q.clearStatuses.run();
       })();
     },
     // A full copy next to the database, taken just before clearing everything; returns its file name.
@@ -93,6 +115,16 @@ export function openDb(file = DB_FILE) {
       return r ? { id: r.id, clearedAt: r.cleared_at, state: JSON.parse(r.state) } : null;
     },
     deleteHistory: (id) => q.deleteHistory.run(id).changes > 0,
+    // SPEC §5.7: what votes.js voteSummary needs; voter is the phone asking (null for none).
+    votesInput(voter) {
+      const statuses = Object.fromEntries(q.statuses.all().map((r) => [r.award, r.status]));
+      const counts = {};
+      for (const r of q.counts.all()) (counts[r.award] ??= {})[r.team_code] = r.n;
+      const mine = voter ? Object.fromEntries(q.mine.all(voter).map((r) => [r.award, r.team_code])) : {};
+      return { statuses, counts, mine };
+    },
+    vote: (award, voter, team) => q.putVote.run(award, voter, team, new Date().toISOString()),
+    setAwardStatus: (award, status) => q.putStatus.run(award, status),
     transaction: (fn) => db.transaction(fn)(),
     backup: (dest) => db.backup(dest),
     close: () => db.close(),

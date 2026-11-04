@@ -74,6 +74,10 @@ A match holds at most one kind of result: typed sets, live points, or a walkover
 
 The organizer types the score of every set. The app checks each set against §4 and checks the match is decided. It then shows the winner it worked out, and saving confirms the result. An incomplete or invalid entry is not saved, and the message says which set is wrong. Typed scores replace any live points already recorded for the match.
 
+- **One set at a time:** in best of 3, set 2 opens only once set 1 is a valid finished set, and set 3 only once sets 1 and 2 are split 1–1. After a 2–0, set 3 is emptied and closed, marked “not needed”. The server refuses a set 3 after a 2–0 as well (`extra_set`).
+- **Saying what is wrong:** while a set is invalid, the message names the set and the reason, in the terms of §4: the score is level; neither side has reached 21 (or 15); it must be won by 2 (from 20–20, or 14–14, play goes on until one side leads by 2); the score can't happen because the set ends as soon as one side leads by 2; or it is over the maximum (at 29–29 the next point wins 30–29; at 20–20, 21–20).
+- **Saving:** Save stays disabled until the sets decide the match. The boxes take digits only, at most two.
+
 ### 5.2 Live scoring
 
 - **Who serves first:** before the first point, the referee picks the side that serves first, from the pre-match toss. It can be corrected at any time, and everything below is recalculated.
@@ -97,6 +101,8 @@ The organizer picks the winner. It counts as **21–0** in one-set matches and *
 
 Clearing removes whatever result a match has and returns it to Ready. Clearing is refused while the match is locked (§7).
 
+**Confirming:** clearing a result, recording a walkover and deleting a History entry each ask for confirmation in the page itself (“Xác nhận” / “Hủy”), not in a browser pop-up, because in-app browsers such as Zalo and Messenger can block those. After a result is cleared, the page says so at the top.
+
 ### 5.5 Clearing everything
 
 An organizer can clear every result and draw at once, with the “Xóa tất cả” (Clear All) button at the top of the admin page, next to “Đăng xuất” (Log out).
@@ -114,7 +120,20 @@ Organizers can look back at every tournament that was cleared.
 - **The list:** newest first. Each entry shows when it was cleared (date and time; entries have no name), the champion if there was one, and how many matches had been played.
 - **One entry:** a read-only copy of the tournament exactly as it was: podium, final, 3rd-place match, semi-finals, both group tables and every match score. Nothing in it can be edited. A match that was still being played shows as “Chưa xong” (not finished).
 - **Deleting:** organizers can delete an entry (for example the rehearsal) after confirming. Deleted entries can't be brought back from the app, though the backup files from §5.5 remain.
-- **Nothing entered:** Clear All on an empty tournament saves no entry.
+- **Nothing entered:** Clear All on an empty tournament saves no entry, unless votes were cast.
+- **Votes:** each entry also keeps the three awards (§5.7) with every team's count and the winners, whether or not voting had closed.
+
+### 5.7 Votes
+
+Spectators vote for three awards: **Pha cầu đẹp nhất** (Best rally), **Đội được yêu thích nhất** (Fan favourite) and **Đội Fair Play** (Fair play).
+
+- **Where:** “Bình chọn” (Vote) under the “Thêm” (More) menu, open to everyone, no login.
+- **What is voted for:** one of the 7 teams, for each award, including Best rally (the team that played it).
+- **One vote per phone:** each browser makes a random voter id the first time and keeps it. It has one vote per award and can change it while the award is open; the latest choice counts. Clearing the browser's data or using another browser gives a new id, so this stops accidents, not someone determined to vote twice.
+- **Opening and closing:** organizers open and close each award separately, at the bottom of the Vote page and on the admin page. An award starts “Chưa mở” (not open yet); a closed award can be reopened.
+- **While open:** everyone sees how many votes have been cast in total, and their own choice, but not the count for each team.
+- **Once closed:** everyone sees the winner (or the tied winners) and every team's count. Votes sent after closing are refused (`voting_closed`).
+- **Clear All:** removes every vote and returns all three awards to “not open yet”, after saving them in History (§5.6).
 
 ## 6. Group standings
 
@@ -270,10 +289,11 @@ Locked (§7) is a flag on top of these states.
 
 - **Title:** “Trueson 1st Badminton Championship” in both languages, with the subtitle “Giải nội bộ · Đôi nam nữ” / “Internal tournament · Mixed doubles”.
 - **Look:** Trueson colours taken from `icons/TS_logo.png` (black `#1a171b`, gold `#cbbb9d`), always light. Gold never carries text on white.
-- **Logos:** the Trueson logo and the sponsors' logos sit together at the top of every page, with the sponsors' set apart by a thin rule. Tapping the Trueson logo returns to Overview; tapping the sponsors' logos opens the Sponsors page.
-- **Menu:** Tổng quan · Quản lý (organizers only) · Vòng bảng · Loại trực tiếp · Thêm ▾. “Thêm” (More) opens a sub-menu with Nhà tài trợ (Sponsors), plus Lịch sử (History) for organizers. On a phone the items share the width: all five fit from 360px wide, and on a 320px phone the Vietnamese labels end in “…”.
+- **Logos:** the Trueson logo and the sponsors' logos sit together at the top of every page, with the sponsors' set apart by a thin rule. Tapping the Trueson logo returns to Overview; tapping the sponsors' logos opens the Sponsors page. The Anh Sơn Movement logo is square, so it is shown taller than the wide Kenichi Miyoshi logo.
+- **Width:** on a wide screen the header and the menu line up with the page's centred column, instead of starting at the left edge of the window.
+- **Menu:** Tổng quan · Quản lý (organizers only) · Vòng bảng · Loại trực tiếp · Thêm ▾. “Thêm” (More) opens a sub-menu with Nhà tài trợ (Sponsors) and Bình chọn (Vote), plus Lịch sử (History) for organizers. On a phone the items share the width: all five fit from 360px wide, and on a 320px phone the Vietnamese labels end in “…”.
 - **Admin access:** spectators see no login button. Organizers open `#admin` (for example `http://<droplet-ip>:8080/#admin`) and enter the PIN once; an Admin tab then appears next to Overview.
-- **Languages:** Vietnamese (the default) and English, with a switch in the header that each browser remembers. Every interface string exists in both languages in `public/i18n.js`.
+- **Languages:** Vietnamese (the default) and English, with a compact “EN” / “VI” button in the header, showing the language it switches to; each browser remembers the choice. Every interface string exists in both languages in `public/i18n.js`.
 - **Devices:** designed for phones first, held upright or sideways, and works on tablets and desktop.
   - Sideways, the header becomes one compact row.
   - On the referee's live screen, on any screen shorter than 760px, the header steps aside so both teams, Undo and Swap sides fit without scrolling. The menu and Back stay.
@@ -284,15 +304,16 @@ Locked (§7) is a flag on top of these states.
   - Groups: standings for A and B with Played, W, L, PF, PA and PD; qualifiers marked once the group is complete; tie and draw flags. Each group's matches are folded under “Các trận đấu (n)” and open on a tap; an opened list stays open while the page refreshes.
   - Knockout: the final first, then the 3rd-place match, then the semifinals.
   - Score entry (organizers): typed sets, live scoring with +1 and Undo, walkover, clear, and clear everything (§5.5). In the list a locked match (§7) shows a red dot, explained once at the bottom of the page; the reason shows on hover and on the match's own page.
+  - Vote, under Thêm: the three awards (§5.7), and for organizers the buttons that open and close them.
   - Sponsors, under Thêm: each sponsor's logo and name, with a thank-you line and buttons for the sponsor's Facebook page and website, which open in a new tab. The list is in `public/sponsors.js`: Anh Sơn Movement and Kenichi Miyoshi. The original logos are in `icons/`.
-- **Refresh:** every 3 s while any match is Live, every 15 s otherwise, and only while the tab is visible.
+- **Refresh:** every 3 s while any match is Live, every 15 s otherwise, and only while the tab is visible. The browser keeps its last copy of the state and checks it on each refresh; when nothing has changed the server answers with an empty “not modified”, and when something has, the state comes compressed (about 1 KB).
 - **Live taps:** each tap shows whether it was saved. A failed tap says so and retries.
 
 ### API
 
 | Endpoint | Access | Does |
 |---|---|---|
-| `GET /api/state` | Public | Everything in §6–§8, computed |
+| `GET /api/state` | Public | Everything in §6–§8, computed; gzipped, with an ETag so an unchanged refresh gets a 304 |
 | `POST /api/login` | — | Checks a PIN |
 | `PUT /api/matches/:id/sets` | PIN | Saves typed sets (§5.1) |
 | `PUT /api/matches/:id/serve` | PIN | Sets which side serves first (§5.2) |
@@ -305,13 +326,16 @@ Locked (§7) is a flag on top of these states.
 | `GET /api/history` | PIN | The History list, newest first (§5.6) |
 | `GET /api/history/:id` | PIN | One saved tournament, as `/api/state` returned it then |
 | `DELETE /api/history/:id` | PIN | Deletes one History entry |
+| `GET /api/votes?voter=<id>` | Public | The three awards: status, total votes, this voter's choice, and once closed every team's count and the winners (§5.7) |
+| `PUT /api/votes/:award` | Public | Casts or changes this voter's vote, body `{ voter, team }`; refused unless the award is open |
+| `PUT /api/awards/:award` | PIN | Opens or closes an award, body `{ status }`: `not_open`, `open` or `closed` |
 
 Errors return a code, which the interface turns into a message in the current language.
 
 | Status | Code | When |
 |---|---|---|
 | 401 | `wrong_pin` | Missing or wrong PIN |
-| 404 | `not_found` | Unknown match or group |
+| 404 | `not_found` | Unknown match, group, History entry or award |
 | 409 | `locked` | A match that depends on this one is finished (§7) |
 | 409 | `pairing_change` | The change would alter a live match's teams (§7) |
 | 409 | `count_mismatch` | The point count doesn't match the server's (§5.2) |
@@ -321,6 +345,7 @@ Errors return a code, which the interface turns into a message in the current la
 | 409 | `no_server` | A point before the first server is set |
 | 409 | `nothing_to_undo` | Undo with no live points |
 | 409 | `no_draw_needed` | A draw for a group with no tie that needs one |
+| 409 | `voting_closed` | A vote for an award that isn't open (§5.7) |
 | 422 | `invalid_input` | Malformed request |
 | 422 | `invalid_set` | A set score that isn't valid (§4) |
 | 422 | `extra_set` | A set entered after the match was already decided |
@@ -329,7 +354,7 @@ Errors return a code, which the interface turns into a message in the current la
 | 429 | `too_many_attempts` | Too many wrong PINs (§9) |
 | 500 | `server_error` | Anything unexpected; the details are in the server log |
 
-**Stored data:** for each match, typed sets, live data (first server and point list), or a walkover winner; and for each group, a draw order. Everything else is computed on every request. History entries store the computed tournament as it was when cleared.
+**Stored data:** for each match, typed sets, live data (first server and point list), or a walkover winner; and for each group, a draw order. Everything else is computed on every request. History entries store the computed tournament as it was when cleared. Votes store, for each award and voter id, the team chosen; and each award stores its status.
 
 ## 11. Differences from the original documents
 
@@ -376,3 +401,9 @@ All agreed with the organizer on 3 November 2026. Change a decision here first, 
 | D27 | Knockout tab order: final, 3rd-place match, semifinals; group matches folded under each table | §10 |
 | D28 | Locked matches in the admin list show a red dot with one explanation at the bottom; podium in gold, silver and bronze | §10 |
 | D29 | Clear All saves the tournament in History; History is organizers-only, named by date and time, entries can be deleted with the PIN, each a full read-only copy | §5.6 |
+| D30 | Typed scores are entered one set at a time; set 3 closes after a 2–0; each invalid set says why | §5.1 |
+| D31 | Clearing, walkovers and History deletes are confirmed in the page, not in a browser pop-up | §5.4 |
+| D32 | Three awards voted by anyone, one vote per phone per award (changeable while open); Best rally is voted for a team | §5.7 |
+| D33 | Organizers open and close each award; counts per team stay hidden while open; winner and counts shown to everyone once closed | §5.7 |
+| D34 | Header and menu centred on wide screens; language button is a compact EN / VI; the square Anh Sơn logo is shown larger | §10 |
+| D35 | The state is gzipped and revalidated with an ETag instead of sent in full on every refresh | §10 |

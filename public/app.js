@@ -2,14 +2,14 @@
 // Everything shown comes from GET /api/state. The only thing worked out here is the winner preview while
 // typing a score, and that uses the same rules.js as the server.
 import { STRINGS } from './i18n.js';
-import { checkSets } from './rules.js';
+import { setProblem } from './rules.js';
 import { SPONSORS } from './sponsors.js';
 
 const POLL_LIVE_MS = 3000;
 const POLL_IDLE_MS = 15000;
 const TAP_RETRIES = 5;
 const NOTICE_MS = 5000;
-const PUBLIC_VIEWS = ['groups', 'knockout', 'sponsors'];
+const PUBLIC_VIEWS = ['groups', 'knockout', 'sponsors', 'vote'];
 const ADMIN_VIEWS = ['admin', 'edit', 'live', 'draw', 'reset', 'history', 'login'];
 // Views with inputs: a poll must not re-render them while someone is typing.
 const FORM_VIEWS = ['edit', 'draw', 'reset', 'login'];
@@ -42,6 +42,14 @@ try {
 }
 // Groups whose match list is open on the Groups tab, kept across re-renders (polling) on this page.
 const openMatchLists = new Set();
+// §5.7: one vote per phone per award, tied to a random id this browser keeps. (crypto.randomUUID only works
+// on HTTPS sites, so the id is built from random bytes, which works on the plain http:// address too.)
+let voter = recall('voter');
+if (!/^[0-9a-f]{32}$/.test(voter ?? '')) {
+  voter = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  remember('voter', voter);
+}
+let votes = null; // { awards } as GET /api/votes returns it, fetched on the Vote and Admin pages
 let state = null;
 let notice = null; // { text, error, until }
 let tapping = idleTapping();
@@ -52,6 +60,10 @@ let historyList = null; // [{ id, clearedAt, champion, finished, total }], or { 
 const historyEntries = {}; // id → { id, clearedAt, state }, or { error }
 let historyLoading = null; // what is being fetched, so a render doesn't start it twice
 let archived = false; // true while a saved copy is drawn, so nothing in it looks live
+// An action waiting for the in-page Confirm (§5): { action, id, side }. The browser's own confirm() isn't used,
+// because some in-app browsers (Zalo, Messenger, Facebook) block it and the button then silently does nothing.
+let confirming = null;
+let typing = false; // the organizer has typed in a form on this page, so a refresh must not redraw it
 
 function idleTapping() {
   return { match: null, busy: false, status: null, changeEnds: false };
@@ -90,7 +102,11 @@ function stateText(m) {
   return t({ waiting: 'stateWaiting', ready: 'stateReady', live: 'stateLive', finished: 'stateFinished' }[m.state]);
 }
 
+// §4: the rule an invalid set breaks, in words (details from rules.js setProblem / checkSets).
+const setText = (reason, set, { to, max }) => t(`set_${reason}`, { set, to, max, deuce: to - 1, cap: max - 1 });
+
 function errorText({ error = 'server_error', details = {} } = {}) {
+  if (error === 'invalid_set' && details.reason) return setText(details.reason, details.set, details);
   const params = { ...details };
   if (details.by) params.by = details.by.map(labelOf).join(', ');
   if (details.match) params.match = labelOf(details.match);
@@ -117,7 +133,7 @@ async function send(method, path, body) {
   }
   if (r.data?.matches) state = r.data;
   else if (r.data?.state) state = r.data.state;
-  if (r.ok) return { ok: true };
+  if (r.ok) return { ok: true, data: r.data };
   if (r.status === 401) forgetPin();
   return { ok: false, message: errorText(r.data ?? {}) };
 }
@@ -162,12 +178,16 @@ async function tap(id, kind, body) {
 async function refresh() {
   try {
     const r = await api('GET', '/api/state');
-    if (r.ok) {
-      state = r.data;
-      render({ fromPoll: true });
-    }
+    if (r.ok) state = r.data;
+    if (['vote', 'admin'].includes(route().view)) await loadVotes();
+    if (r.ok) render({ fromPoll: true });
   } catch {}
   schedule();
+}
+
+async function loadVotes() {
+  const r = await api('GET', `/api/votes?voter=${voter}`);
+  if (r.ok) votes = r.data;
 }
 
 // Poll every 3 s while a match is live, 15 s otherwise, and only while the page is visible.
@@ -256,6 +276,79 @@ function podiumHtml() {
 }
 
 const back = () => `<a class="back" href="#admin">← ${t('back')}</a>`;
+
+const awardTitle = (a) => t(`award_${a.id}`);
+
+// A closed award (or any award in History): the winner(s), then every team's votes as a bar.
+function voteResults(a) {
+  const top = Math.max(1, ...a.results.map((r) => r.votes));
+  const names = a.winners.map((c) => esc(teamText(c))).join(', ');
+  const headline = !a.winners.length ? t('voteNoVotes') : t(a.winners.length > 1 ? 'voteWinners' : 'voteWinner', { team: names });
+  const rows = a.results
+    .map(
+      (r) => `
+      <li class="${a.winners.includes(r.code) ? 'winner' : ''}">
+        <span class="name">${esc(teamText(r.code))}</span>
+        <span class="bar"><span style="width: ${(100 * r.votes) / top}%"></span></span>
+        <span class="n">${r.votes}</span>
+      </li>`,
+    )
+    .join('');
+  return `<p class="vote-headline">${headline}</p><ol class="vote-results">${rows}</ol>`;
+}
+
+function awardCard(a) {
+  let body;
+  if (a.status === 'not_open') body = `<p class="empty">${t('voteNotOpen')}</p>`;
+  else if (a.status === 'closed') body = voteResults(a);
+  else {
+    const options = state.teams
+      .map(
+        (team) => `
+        <button type="button" class="vote-option${a.mine === team.code ? ' chosen' : ''}" aria-pressed="${a.mine === team.code}"
+          data-action="vote" data-award="${a.id}" data-team="${team.code}">${esc(team.name)}</button>`,
+      )
+      .join('');
+    body = `
+      <p class="hint">${a.mine ? t('voteYours', { team: esc(teamText(a.mine)) }) : t('votePick')} ${t('voteCount', { n: a.total })}</p>
+      <div class="vote-options">${options}</div>`;
+  }
+  return `
+    <section class="panel stack award" data-award="${a.id}">
+      <div class="award-head"><h3>${awardTitle(a)}</h3><span class="badge status-${a.status}">${t(`voteStatus_${a.status}`)}</span></div>
+      ${body}
+    </section>`;
+}
+
+// Admin: open, close or reopen each award.
+function awardControls() {
+  if (!votes) return '';
+  const next = { not_open: ['open', 'voteOpen'], open: ['closed', 'voteClose'], closed: ['open', 'voteReopen'] };
+  const rows = votes.awards
+    .map((a) => {
+      const [status, label] = next[a.status];
+      return `
+        <li>
+          <span><strong>${awardTitle(a)}</strong> · ${t(`voteStatus_${a.status}`)} · ${t('voteCount', { n: a.total })}</span>
+          <button type="button" class="button small${a.status === 'open' ? '' : ' secondary'}" data-action="award-status" data-award="${a.id}" data-status="${status}">${t(label)}</button>
+        </li>`;
+    })
+    .join('');
+  return `<section><h2>${t('vote')}</h2><ul class="award-controls panel">${rows}</ul></section>`;
+}
+
+const isConfirming = (action, id) => confirming?.action === action && confirming.id === String(id);
+// Shown in place of the button that asked for it; Confirm repeats that button's action with data-confirmed.
+function confirmBox(message, { action, id, side = '' }, yesClass = 'danger') {
+  return `
+    <div class="confirm" role="alertdialog" aria-label="${esc(message)}">
+      <p>${esc(message)}</p>
+      <div class="actions">
+        <button type="button" class="button ${yesClass}" data-action="${action}" data-id="${id}" data-side="${side}" data-confirmed="yes">${t('confirmYes')}</button>
+        <button type="button" class="button secondary" data-action="cancel-confirm">${t('confirmNo')}</button>
+      </div>
+    </div>`;
+}
 const formatDate = (iso) =>
   new Date(iso).toLocaleString(lang === 'vi' ? 'vi-VN' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -354,6 +447,7 @@ const views = {
         </div>
       </div>
       ${draws.join('')}
+      ${awardControls()}
       ${Object.keys(state.groups).map((g) => section(t('group', { g }), state.matches.filter((m) => m.group === g))).join('')}
       ${section(t('navKnockout'), state.matches.filter((m) => m.stage !== 'group'))}
       ${anyLocked ? `<p class="legend lock-legend"><span class="lock-dot"></span>${t('lockedLegend')}</p>` : ''}`;
@@ -385,7 +479,7 @@ const views = {
         )
         .join('');
     const cards = SPONSORS.map(
-      (s) => `<li class="sponsor"><img src="${s.logo}" alt=""><strong>${esc(s.name)}</strong><div class="socials">${links(s)}</div></li>`,
+      (s) => `<li class="sponsor"><img src="${s.logo}" alt="" data-shape="${s.shape}"><strong>${esc(s.name)}</strong><div class="socials">${links(s)}</div></li>`,
     ).join('');
     return `
       <section>
@@ -411,14 +505,22 @@ const views = {
       { length: m.format.sets },
       (_, i) => `<div class="set-row"><span>${t('set', { n: i + 1 })}</span>${input(i, 1)}${input(i, 2)}</div>`,
     ).join('');
-    const walkovers = [1, 2]
-      .map(
-        (s) =>
-          `<button type="button" class="button secondary" data-action="walkover" data-id="${m.id}" data-side="${s}">${t('walkoverWins', { team: esc(sideText(m, s)) })}</button>`,
-      )
-      .join('');
+    const walkovers = isConfirming('walkover', m.id)
+      ? confirmBox(t('confirmWalkover', { team: sideText(m, Number(confirming.side)) }), confirming, '')
+      : [1, 2]
+          .map(
+            (s) =>
+              `<button type="button" class="button secondary" data-action="walkover" data-id="${m.id}" data-side="${s}">${t('walkoverWins', { team: esc(sideText(m, s)) })}</button>`,
+          )
+          .join('');
+    const clear = !m.result
+      ? ''
+      : isConfirming('clear', m.id)
+        ? confirmBox(t('confirmClear', { match: matchText(m) }), confirming)
+        : `<button type="button" class="button danger" data-action="clear" data-id="${m.id}">${t('clear')}</button>`;
     return `
       ${back()}
+      ${matchCard(m)}
       <form data-form="sets" data-id="${m.id}" class="panel stack">
         <h2>${matchText(m)}</h2>
         <p class="hint">${formatText(m)}</p>
@@ -431,7 +533,7 @@ const views = {
         <h3>${t('walkoverTitle')}</h3>
         <div class="actions">${walkovers}</div>
       </section>
-      ${m.result ? `<button type="button" class="button danger" data-action="clear" data-id="${m.id}">${t('clear')}</button>` : ''}`;
+      ${clear}`;
   },
 
   // §5.2: the referee's screen. Each side is one big button; tapping it gives that side the rally.
@@ -485,6 +587,14 @@ const views = {
     </div>`;
   },
 
+  // §5.7: the fan awards; anyone can vote while an award is open.
+  vote() {
+    if (!votes) return `<p class="empty">${t('loading')}</p>`;
+    return `
+      <section><h2>${t('vote')}</h2><p class="hint">${t('voteHint')}</p></section>
+      ${votes.awards.map(awardCard).join('')}`;
+  },
+
   // §5.6: the list of saved tournaments, newest first, or one saved copy (read-only).
   history(id) {
     if (id) return historyEntry(id);
@@ -498,8 +608,9 @@ const views = {
           <p>${h.champion ? `${t('champion')}: <strong>${esc(h.champion)}</strong>` : t('historyNoChampion')}</p>
           <div class="actions">
             <a class="button small" href="#history/${h.id}">${t('historyView')}</a>
-            <button type="button" class="button small danger" data-action="delete-history" data-id="${h.id}" data-date="${esc(date)}">${t('historyDelete')}</button>
+            ${isConfirming('delete-history', h.id) ? '' : `<button type="button" class="button small danger" data-action="delete-history" data-id="${h.id}">${t('historyDelete')}</button>`}
           </div>
+          ${isConfirming('delete-history', h.id) ? confirmBox(t('confirmDeleteHistory', { date }), confirming) : ''}
         </article>`;
     };
     return `
@@ -553,10 +664,12 @@ function historyEntry(id) {
       ${backToList}
       <div class="admin-head">
         <h2>${t('historyTitle', { date: esc(date) })}</h2>
-        <button type="button" class="button small danger" data-action="delete-history" data-id="${entry.id}" data-date="${esc(date)}">${t('historyDelete')}</button>
+        ${isConfirming('delete-history', entry.id) ? '' : `<button type="button" class="button small danger" data-action="delete-history" data-id="${entry.id}">${t('historyDelete')}</button>`}
       </div>
+      ${isConfirming('delete-history', entry.id) ? confirmBox(t('confirmDeleteHistory', { date }), confirming) : ''}
       <p class="hint">${t('historyReadOnly')} ${t('progress', { done: state.progress.finished, total: state.progress.total })}.</p>
       ${podiumHtml()}
+      ${(state.votes ?? []).map((a) => `<section class="panel stack award"><h3>${awardTitle(a)}</h3>${voteResults(a)}</section>`).join('')}
       ${views.knockout()}
       ${views.groups(true)}`;
   } finally {
@@ -585,28 +698,63 @@ async function loadHistory(id) {
 
 // ---------- Typed-score form ----------
 
-// Rows left completely empty are ignored; a half-filled row becomes NaN, which rules.js rejects.
-function readSets(form) {
-  const num = (v) => (v.trim() === '' ? NaN : Number(v));
-  return [...form.querySelectorAll('.set-row:not(.head)')]
-    .map((row) => [...row.querySelectorAll('input')].map((input) => input.value))
-    .filter(([a, b]) => a.trim() !== '' || b.trim() !== '')
-    .map(([a, b]) => [num(a), num(b)]);
-}
-
-function preview(form) {
+// §4, §5.1: sets are entered one at a time. A set's boxes open only once every set before it is a valid
+// finished set and the match isn't decided yet; sets after the deciding one are emptied. Each problem is
+// explained with the rule it breaks, and Save works only once the match is decided. Returns the valid sets.
+function checkScoreForm(form) {
   const m = byId(form.dataset.id);
+  const rows = [...form.querySelectorAll('.set-row:not(.head)')];
+  const need = Math.ceil(m.format.sets / 2);
+  const won = [0, 0];
+  const sets = [];
+  let message = null;
+  let isError = false;
+  let open = true;
+  let decided = false;
+  rows.forEach((row, i) => {
+    const inputs = [...row.querySelectorAll('input')];
+    for (const input of inputs) {
+      input.value = input.value.replace(/\D/g, '').slice(0, 2);
+      if (decided) input.value = '';
+      input.disabled = !open;
+    }
+    row.classList.toggle('closed', !open);
+    if (!open) return;
+    const [a, b] = inputs.map((input) => input.value);
+    if (a === '' || b === '') {
+      open = false;
+      isError = a !== '' || b !== '';
+      message = t(isError ? 'setHalf' : 'setNext', { set: i + 1 });
+      return;
+    }
+    const set = [Number(a), Number(b)];
+    const reason = setProblem(set, m.format);
+    if (reason) {
+      open = false;
+      isError = true;
+      message = setText(reason, i + 1, m.format);
+      return;
+    }
+    sets.push(set);
+    won[set[0] > set[1] ? 0 : 1]++;
+    if (won.includes(need)) decided = true;
+    open = !decided;
+  });
+
   const out = form.querySelector('.preview');
-  const sets = readSets(form);
-  out.className = 'preview';
-  out.textContent = '';
-  if (!sets.length) return;
-  try {
-    out.textContent = t('winnerIs', { team: sideText(m, checkSets(sets, m.format).winner) });
+  form.querySelector('button[type="submit"]').disabled = !decided;
+  if (decided) {
+    const winner = won[0] === need ? 1 : 2;
+    const team = sideText(m, winner);
+    const parts = [m.format.sets > 1 ? t('winnerIsSets', { team, score: `${won[winner - 1]}–${won[2 - winner]}` }) : t('winnerIs', { team })];
+    if (sets.length < rows.length) parts.push(t('noMoreSets', { set: sets.length + 1 }));
+    out.textContent = parts.join(' ');
     out.className = 'preview ok';
-  } catch (err) {
-    out.textContent = t(`error_${err.code}`, err.details);
+  } else {
+    out.textContent = message ?? '';
+    out.className = isError ? 'preview error' : 'preview';
   }
+  return sets;
 }
 
 // ---------- Rendering and routing ----------
@@ -628,11 +776,12 @@ function render({ fromPoll = false } = {}) {
   document.querySelectorAll('[data-i18n-title]').forEach((el) => (el.title = t(el.dataset.i18nTitle)));
   const tab = view === 'history' ? 'history' : ADMIN_VIEWS.includes(view) ? 'admin' : view;
   document.querySelectorAll('nav [data-view]').forEach((a) => a.classList.toggle('active', a.dataset.view === tab));
-  document.querySelector('.more-toggle').classList.toggle('active', tab === 'sponsors' || tab === 'history');
+  document.querySelector('.more-toggle').classList.toggle('active', ['sponsors', 'vote', 'history'].includes(tab));
   document.querySelectorAll('nav [data-admin-only]').forEach((el) => (el.hidden = !pin));
   if (view === 'history' && (arg ? !historyEntries[arg] : historyList === null)) loadHistory(arg);
   if (!state) return;
-  if (fromPoll && FORM_VIEWS.includes(view) && rendered === key) return;
+  const busy = typing || main.contains(document.activeElement) && document.activeElement.matches('input, select');
+  if (fromPoll && FORM_VIEWS.includes(view) && rendered === key && busy) return;
 
   const shown =
     notice && notice.until > Date.now()
@@ -641,7 +790,7 @@ function render({ fromPoll = false } = {}) {
   main.innerHTML = shown + views[view](arg);
   rendered = key;
   const form = main.querySelector('form[data-form="sets"]');
-  if (form) preview(form);
+  if (form) checkScoreForm(form);
 }
 
 // ---------- Events ----------
@@ -658,7 +807,19 @@ document.addEventListener('click', async (e) => {
   if (!el) return;
   const { action, id } = el.dataset;
   const side = Number(el.dataset.side);
-  if (action === 'more') {
+  if (['walkover', 'clear', 'delete-history'].includes(action)) {
+    if (el.dataset.confirmed !== 'yes') {
+      confirming = { action, id, side: el.dataset.side ?? '' };
+      render();
+      main.querySelector('.confirm [data-confirmed]')?.focus();
+      return;
+    }
+    confirming = null;
+  }
+  if (action === 'cancel-confirm') {
+    confirming = null;
+    render();
+  } else if (action === 'more') {
     const menu = document.querySelector('.more-menu');
     menu.hidden = !menu.hidden;
     el.setAttribute('aria-expanded', String(!menu.hidden));
@@ -668,6 +829,8 @@ document.addEventListener('click', async (e) => {
     render();
   } else if (action === 'logout') {
     forgetPin();
+    historyList = null;
+    for (const key of Object.keys(historyEntries)) delete historyEntries[key];
     location.hash = '';
     render();
   } else if (action === 'point') {
@@ -681,29 +844,41 @@ document.addEventListener('click', async (e) => {
     else flipped.add(id);
     remember('flipped', JSON.stringify([...flipped]));
     render();
+  } else if (action === 'vote') {
+    const r = await send('PUT', `/api/votes/${el.dataset.award}`, { voter, team: el.dataset.team });
+    if (r.ok) votes = r.data;
+    else await loadVotes(); // e.g. it was closed a moment ago: show its results
+    if (!r.ok) setNotice(r.message, true);
+    render();
+  } else if (action === 'award-status') {
+    const r = await send('PUT', `/api/awards/${el.dataset.award}`, { status: el.dataset.status });
+    if (r.ok) votes = r.data;
+    else setNotice(r.message, true);
+    render();
   } else if (action === 'serve') {
     const r = await send('PUT', `/api/matches/${id}/serve`, { side });
     if (!r.ok) setNotice(r.message, true);
     render();
   } else if (action === 'walkover') {
-    if (!confirm(t('confirmWalkover', { team: sideText(byId(id), side) }))) return;
     const r = await send('POST', `/api/matches/${id}/walkover`, { winner: side });
     setNotice(r.ok ? t('saved') : r.message, !r.ok);
     if (r.ok) location.hash = '#admin';
     else render();
   } else if (action === 'delete-history') {
-    if (!confirm(t('confirmDeleteHistory', { date: el.dataset.date }))) return;
     const r = await send('DELETE', `/api/history/${id}`);
     setNotice(r.ok ? t('historyDeleted') : r.message, !r.ok);
     delete historyEntries[id];
     historyList = null;
-    if (location.hash === '#history') render();
-    else location.hash = '#history';
+    if (location.hash === '#history') {
+      render();
+      window.scrollTo(0, 0);
+    } else location.hash = '#history';
   } else if (action === 'clear') {
-    if (!confirm(t('confirmClear', { match: labelOf(id) }))) return;
     const r = await send('DELETE', `/api/matches/${id}`);
-    setNotice(r.ok ? t('saved') : r.message, !r.ok);
+    setNotice(r.ok ? t('cleared') : r.message, !r.ok);
+    typing = false;
     render();
+    window.scrollTo(0, 0); // the notice and the match card (now empty) are at the top
   }
 });
 
@@ -741,12 +916,13 @@ document.addEventListener('submit', async (e) => {
     if (r.ok) remember('pin', pin);
     else pin = null;
   } else if (form.dataset.form === 'sets') {
-    r = await send('PUT', `/api/matches/${form.dataset.id}/sets`, { sets: readSets(form) });
+    r = await send('PUT', `/api/matches/${form.dataset.id}/sets`, { sets: checkScoreForm(form) });
   } else if (form.dataset.form === 'draw') {
     const order = [...form.querySelectorAll('select')].map((select) => select.value);
     r = await send('PUT', `/api/draws/${form.dataset.group}`, { order });
   }
   if (r.ok) {
+    typing = false;
     if (form.dataset.form !== 'login') {
       setNotice(t('saved'));
       location.hash = '#admin';
@@ -761,16 +937,20 @@ document.addEventListener('submit', async (e) => {
 });
 
 document.addEventListener('input', (e) => {
+  if (e.target.closest('main form')) typing = true;
   const form = e.target.closest('form[data-form="sets"]');
-  if (form) preview(form);
+  if (form) checkScoreForm(form);
 });
 
 window.addEventListener('hashchange', () => {
   closeMore();
+  confirming = null;
+  typing = false;
   if (location.hash === '#history') historyList = null;
   if (tapping.match !== route().arg) tapping = idleTapping();
   render();
   window.scrollTo(0, 0);
+  refresh(); // fetch the latest data at once, e.g. a result another organizer just entered
 });
 
 document.addEventListener('keydown', (e) => {
@@ -791,7 +971,7 @@ document.addEventListener(
 );
 
 // §10: the sponsors' logos sit next to the Trueson logo and lead to the Sponsors page.
-document.querySelector('.sponsor-logos').innerHTML = SPONSORS.map((s) => `<img src="${s.logo}" alt="${esc(s.name)}">`).join('');
+document.querySelector('.sponsor-logos').innerHTML = SPONSORS.map((s) => `<img src="${s.logo}" alt="${esc(s.name)}" data-shape="${s.shape}">`).join('');
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') refresh();

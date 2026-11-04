@@ -28,6 +28,19 @@ export function isFinishedSet([a, b], { to, max }) {
   return (w === to && l <= to - 2) || (w > to && w <= max && w - l === 2) || (w === max && l === max - 1);
 }
 
+// §4: why a set score is not a valid finished set, or null if it is. Article 3 of the rules:
+// level (a set can't end level), short (nobody has reached the target), lead (must win by 2),
+// too_far (the set would already have ended once someone led by 2), over_max (past the cap).
+export function setProblem(set, format) {
+  if (isFinishedSet(set, format)) return null;
+  const w = Math.max(...set);
+  const l = Math.min(...set);
+  if (w === l) return 'level';
+  if (w < format.to) return 'short';
+  if (w > format.max) return 'over_max';
+  return w - l < 2 ? 'lead' : 'too_far';
+}
+
 // §4, §5.1: checks typed sets; returns the winning side and sets won.
 export function checkSets(sets, format) {
   if (!Array.isArray(sets) || !sets.every((s) => Array.isArray(s) && s.length === 2 && s.every(isPoints))) {
@@ -37,7 +50,8 @@ export function checkSets(sets, format) {
   const won = [0, 0];
   sets.forEach((set, i) => {
     if (won.includes(need)) throw new RuleError('extra_set', { set: i + 1 });
-    if (!isFinishedSet(set, format)) throw new RuleError('invalid_set', { set: i + 1 });
+    const reason = setProblem(set, format);
+    if (reason) throw new RuleError('invalid_set', { set: i + 1, reason, to: format.to, max: format.max });
     won[set[0] > set[1] ? 0 : 1]++;
   });
   if (!won.includes(need)) throw new RuleError('incomplete');

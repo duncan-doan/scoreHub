@@ -1,12 +1,12 @@
 {
   "teams": [
-    {"code": "A1", "name": "Duyên – Khải", "group": "A"},
-    {"code": "A2", "name": "Triều – Đạt", "group": "A"},
-    {"code": "A3", "name": "Nguyên – Quỳnh", "group": "A"},
-    {"code": "B1", "name": "Bảo – Miyoshi", "group": "B"},
-    {"code": "B2", "name": "Huệ – Trinh", "group": "B"},
-    {"code": "B3", "name": "An – Bích", "group": "B"},
-    {"code": "B4", "name": "Viễn – Đăng", "group": "B"}
+    {"code": "A1", "name": "Duyen – Khai", "group": "A"},
+    {"code": "A2", "name": "Trieu – Dat", "group": "A"},
+    {"code": "A3", "name": "Nguyen – Quynh", "group": "A"},
+    {"code": "B1", "name": "Bao – Miyoshi", "group": "B"},
+    {"code": "B2", "name": "Hue – Trinh", "group": "B"},
+    {"code": "B3", "name": "An – BIch", "group": "B"},
+    {"code": "B4", "name": "Vien – Dang", "group": "B"}
   ],
   "matches": [
     {"id": "G1", "stage": "group", "group": "A", "order": 1, "team1": "A1", "team2": "A2"},

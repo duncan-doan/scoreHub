@@ -10,7 +10,7 @@ const SIZES = [
   [320, 568], [360, 640], [375, 553], [375, 667], [390, 664], [412, 915], [430, 932], [768, 1024],
   [568, 320], [667, 320], [667, 375], [740, 360], [844, 340], [844, 390], [932, 430], [1024, 768], [1280, 800],
 ];
-const VIEWS = ['', '#groups', '#knockout', '#sponsors', '#admin', '#edit/FINAL', '#edit/G1', '#live/FINAL', '#live/THIRD', '#reset'];
+const VIEWS = ['', '#groups', '#knockout', '#sponsors', '#vote', '#admin', '#edit/FINAL', '#edit/G1', '#live/FINAL', '#live/THIRD', '#reset'];
 // Both groups done (SPEC §6.4 Examples 1 and 3) and both semifinals typed, so the final can be scored live.
 const TYPED = { G1: [21, 15], G2: [21, 19], G3: [15, 21], G4: [21, 18], G5: [10, 21], G6: [21, 5], G7: [19, 21], G8: [21, 19], G9: [21, 8], SF1: [21, 15], SF2: [19, 21] };
 

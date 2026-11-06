@@ -254,6 +254,17 @@ function cardList(title, matches, empty) {
   return `<section><h2>${title}</h2>${body}</section>`;
 }
 
+// §10: on Overview, Up next is folded until tapped; the toggle listener keeps it open across polls.
+function upNextHtml(matches) {
+  return `
+    <section>
+      <details class="up-next" data-matches="upNext"${openMatchLists.has('upNext') ? ' open' : ''}>
+        <summary><h2>${t('upNext')}</h2></summary>
+        <div class="cards">${matches.map((m) => matchCard(m)).join('')}</div>
+      </details>
+    </section>`;
+}
+
 function tieNote(group) {
   if (!group.drawTie) return '';
   const teams = group.drawTie.teams.map((c) => esc(teamText(c))).join(', ');
@@ -432,8 +443,8 @@ const notFound = () => `${back()}<p class="note">${t('error_not_found')}</p>`;
 // ---------- Views ----------
 
 const views = {
-  // §10: an open vote first, then the prizes, then the matches; once the final and the 3rd-place match are
-  // both decided, the final results come before the prizes.
+  // §10: an open vote first, then the matches, then the prizes at the bottom; once the final and the 3rd-place
+  // match are both decided, the final results come first, under the progress.
   overview() {
     const { progress, matches, podium } = state;
     const next = matches.filter((m) => m.state === 'ready').slice(0, 4);
@@ -446,10 +457,10 @@ const views = {
       </section>
       ${voteCallHtml()}
       ${decided ? podiumHtml() : ''}
-      ${prizesHtml()}
       ${cardList(t('liveNow'), matches.filter((m) => m.state === 'live'), t('noLive'))}
-      ${next.length ? cardList(t('upNext'), next) : ''}
-      ${latest.length ? cardList(t('latest'), latest) : ''}`;
+      ${next.length ? upNextHtml(next) : ''}
+      ${latest.length ? cardList(t('latest'), latest) : ''}
+      ${prizesHtml()}`;
   },
 
   groups(openAll = false) {
@@ -1043,7 +1054,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && route().sheet) closeSheet();
 });
 
-// Remember which groups' match lists are open, so a poll's re-render doesn't fold them away again.
+// Remember which match lists are open (each group's, and Up next on Overview), so a poll's re-render doesn't fold
+// them away again.
 // ("toggle" doesn't bubble, hence the capture phase.)
 document.addEventListener(
   'toggle',

@@ -55,8 +55,13 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Trueson 1st Badminton Championship' })).toBeVisible();
     await expect(page.getByText('Đã đấu 0/13 trận')).toBeVisible();
-    // Before the final results: the prizes under the progress, then the matches; no final results yet.
-    await expect(page.locator('main h2')).toHaveText([/^Giải thưởng/, 'Đang thi đấu', 'Trận sắp tới']);
+    // Before the final results: the matches, then the prizes at the bottom; no final results yet.
+    await expect(page.locator('main h2')).toHaveText(['Đang thi đấu', 'Trận sắp tới', /^Giải thưởng/]);
+    // Up next is folded until tapped.
+    const upNext = page.locator('details.up-next');
+    await expect(upNext.locator('.cards')).toBeHidden();
+    await upNext.getByText('Trận sắp tới').click();
+    await expect(upNext.locator('.cards')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Tổng quan' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Quản lý' })).toBeHidden();
   });
@@ -64,6 +69,8 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
   await test.step('the language switch is remembered', async () => {
     await page.getByRole('button', { name: 'English' }).click();
     await expect(page.getByText('0 of 13 matches played')).toBeVisible();
+    // The page re-rendered in English; the opened Up next stays open.
+    await expect(page.locator('details.up-next .cards')).toBeVisible();
     await page.reload();
     await expect(page.getByRole('link', { name: 'Overview' })).toBeVisible();
   });
@@ -155,8 +162,8 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
     await page.getByRole('button', { name: 'Đăng xuất' }).click();
     await expect(page.getByRole('link', { name: 'Quản lý' })).toBeHidden();
     await expect(page.getByText('Đã đấu 13/13 trận')).toBeVisible();
-    // After the final results: they come first, under the progress, then the prizes.
-    await expect(page.locator('main h2')).toHaveText(['Kết quả chung cuộc', /^Giải thưởng/, 'Đang thi đấu', 'Kết quả mới nhất']);
+    // After the final results: they come first, under the progress, then the matches, then the prizes.
+    await expect(page.locator('main h2')).toHaveText(['Kết quả chung cuộc', 'Đang thi đấu', 'Kết quả mới nhất', /^Giải thưởng/]);
     await expect(page.locator('.podium li')).toHaveText([new RegExp(`Vô địch\\s*${NAME.A1}`), new RegExp(`Giải Nhì\\s*${NAME.A3}`), new RegExp(`Giải Ba\\s*${NAME.B1}`)]);
     // Gold, silver and bronze.
     const colours = await page.locator('.podium li').evaluateAll((items) => items.map((li) => getComputedStyle(li).backgroundColor));

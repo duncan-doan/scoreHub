@@ -258,17 +258,24 @@ input, select { min-width: 0; padding: 10px 12px; border: 1px solid var(--line);
 }
 
 /* Groups tab: each group's matches fold away under its table. */
-.group-matches > summary {
+.group-matches > summary,
+.up-next > summary {
   display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 2px;
   color: var(--brand); font-weight: 600; cursor: pointer; list-style: none;
 }
-.group-matches > summary::-webkit-details-marker { display: none; }
-.group-matches > summary::before {
+.group-matches > summary::-webkit-details-marker,
+.up-next > summary::-webkit-details-marker { display: none; }
+.group-matches > summary::before,
+.up-next > summary::before {
   content: ""; width: 0; height: 0; border: 5px solid transparent; border-left-color: currentColor; border-right-width: 0;
   transition: transform 0.15s;
 }
-.group-matches[open] > summary::before { transform: rotate(90deg); }
+.group-matches[open] > summary::before,
+.up-next[open] > summary::before { transform: rotate(90deg); }
 .group-matches > .cards { margin-top: 4px; }
+/* Overview: Up next folds the same way, but its summary is the section heading. */
+.up-next > summary { color: inherit; }
+.up-next > summary h2 { margin: 0; }
 
 /* History: the saved tournaments, newest first. */
 .history-list { margin-top: 12px; }
@@ -276,7 +283,7 @@ input, select { min-width: 0; padding: 10px 12px; border: 1px solid var(--line);
 /* Admin: a locked match is marked with a red dot, explained once at the top of the page. */
 .lock-dot { display: inline-block; flex: none; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; background: var(--danger); vertical-align: 0; }
 .lock-legend { display: flex; align-items: baseline; gap: 2px; }
-@media (prefers-reduced-motion: reduce) { .group-matches > summary::before { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .group-matches > summary::before, .up-next > summary::before { transition: none; } }
 
 /* Typed scores: a set's boxes open only when the sets before it are done (§5.1). */
 input:disabled { background: var(--bg); color: var(--muted); }

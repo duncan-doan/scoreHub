@@ -202,8 +202,28 @@ function rankGroup(group, seed, matches, draw) {
 
 // The whole tournament, computed from the seed and what people entered (§6–§8).
 // results: { [matchId]: { kind: 'sets' | 'live' | 'walkover', data } }; draws: { [group]: [codes] }.
+// §3: the planned start time and court of each match, a fixed plan that ignores how the day actually goes.
+// In seed order, each match takes the court that is free first (the lower number on a tie), and each stage
+// starts once every match of the stage before it has ended.
+function schedule({ schedule: { start, courts, minutes }, matches }) {
+  const [h, m] = start.split(':').map(Number);
+  const free = Array(courts).fill(h * 60 + m); // the minute of the day each court is free from
+  const two = (n) => String(n).padStart(2, '0');
+  const plan = {};
+  let stage;
+  for (const match of matches) {
+    if (match.stage !== stage) free.fill(Math.max(...free));
+    stage = match.stage;
+    const court = free.indexOf(Math.min(...free));
+    plan[match.id] = { time: `${two(Math.floor(free[court] / 60))}:${two(free[court] % 60)}`, court: court + 1 };
+    free[court] += minutes[match.stage];
+  }
+  return plan;
+}
+
 export function computeState(seed, results = {}, draws = {}) {
   const deps = dependents(seed);
+  const plan = schedule(seed);
   const byId = {};
   const groups = {};
 
@@ -217,6 +237,7 @@ export function computeState(seed, results = {}, draws = {}) {
       stage: m.stage,
       group: m.group ?? null,
       order: m.order,
+      plan: plan[m.id],
       format,
       slots: m.stage === 'group' ? null : [m.team1, m.team2],
       team1,

@@ -4,17 +4,20 @@
 import { STRINGS } from './i18n.js';
 import { setProblem } from './rules.js';
 import { SPONSORS } from './sponsors.js';
+import { PRIZES } from './prizes.js';
 
 const POLL_LIVE_MS = 3000;
 const POLL_IDLE_MS = 15000;
 const TAP_RETRIES = 5;
 const NOTICE_MS = 5000;
-const PUBLIC_VIEWS = ['groups', 'knockout', 'sponsors', 'vote'];
+const PUBLIC_VIEWS = ['groups', 'knockout', 'sponsors'];
+const AWARD_IDS = PRIZES.filter((p) => p.award).map((p) => p.award);
 const ADMIN_VIEWS = ['admin', 'edit', 'live', 'draw', 'reset', 'history', 'login'];
 // Views with inputs: a poll must not re-render them while someone is typing.
 const FORM_VIEWS = ['edit', 'draw', 'reset', 'login'];
 
 const main = document.querySelector('main');
+const sheetLayer = document.querySelector('.sheet-layer');
 
 // Browser storage can be unavailable (private mode); the app then just forgets between visits.
 const recall = (key) => {
@@ -49,8 +52,11 @@ if (!/^[0-9a-f]{32}$/.test(voter ?? '')) {
   voter = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
   remember('voter', voter);
 }
-let votes = null; // { awards } as GET /api/votes returns it, fetched on the Vote and Admin pages
+let votes = null; // { awards } as GET /api/votes returns it, fetched on Overview and the admin page
 let state = null;
+// Counts the changes this page has sent. A refresh that started before one of them may carry the data from
+// before it (e.g. results that Clear All has just removed), so it is dropped.
+let changes = 0;
 let notice = null; // { text, error, until }
 let tapping = idleTapping();
 let rendered = null; // the view last rendered, so polling can leave forms alone
@@ -64,6 +70,8 @@ let archived = false; // true while a saved copy is drawn, so nothing in it look
 // because some in-app browsers (Zalo, Messenger, Facebook) block it and the button then silently does nothing.
 let confirming = null;
 let typing = false; // the organizer has typed in a form on this page, so a refresh must not redraw it
+let sheetShown = null; // the vote popup's HTML as last drawn, so a refresh doesn't redraw (and unfocus) it
+let sheetLinkTapped = false; // a link to a popup on this page was just tapped (see the hashchange handler)
 
 function idleTapping() {
   return { match: null, busy: false, status: null, changeEnds: false };
@@ -133,6 +141,7 @@ async function send(method, path, body) {
   }
   if (r.data?.matches) state = r.data;
   else if (r.data?.state) state = r.data.state;
+  changes++;
   if (r.ok) return { ok: true, data: r.data };
   if (r.status === 401) forgetPin();
   return { ok: false, message: errorText(r.data ?? {}) };
@@ -161,6 +170,7 @@ async function tap(id, kind, body) {
       continue;
     }
     tapping.busy = false;
+    changes++;
     if (r.ok) {
       state = r.data;
       tapping.status = { key: 'statusSaved' };
@@ -176,10 +186,11 @@ async function tap(id, kind, body) {
 }
 
 async function refresh() {
+  const seen = changes;
   try {
     const r = await api('GET', '/api/state');
-    if (r.ok) state = r.data;
-    if (['vote', 'admin'].includes(route().view)) await loadVotes();
+    if (r.ok && seen === changes) state = r.data;
+    if (['overview', 'admin'].includes(route().view)) await loadVotes();
     if (r.ok) render({ fromPoll: true });
   } catch {}
   schedule();
@@ -227,9 +238,11 @@ function matchCard(m, extra = '', mark = '') {
       <span class="name">${esc(sideText(m, side))}${serving(side)}</span>
       <span class="score">${scoreCells(m, side)}</span>
     </div>`;
+  // §3: the planned time and court, next to the match's name until the match starts.
+  const plan = !archived && ['waiting', 'ready'].includes(m.state) ? `<span class="plan">${t('planned', m.plan)}</span>` : '';
   return `
     <article class="match is-${live || m.state !== 'live' ? m.state : 'unfinished'}" data-match="${m.id}">
-      <header><span>${matchText(m)}</span><span class="badge">${mark}${stateText(m)}</span></header>
+      <header><span>${matchText(m)}</span>${plan}<span class="badge">${mark}${stateText(m)}</span></header>
       ${row(1)}${row(2)}${extra}
     </article>`;
 }
@@ -320,6 +333,64 @@ function awardCard(a) {
     </section>`;
 }
 
+const money = (n) => new Intl.NumberFormat(lang === 'vi' ? 'vi-VN' : 'en-GB', { style: 'currency', currency: 'VND' }).format(n);
+
+// §10: the prizes. The podium's as three medal tiles; the voted awards (§5.7) as a list, each row showing where
+// its vote stands (Vote, Voted, not open yet, or the winner once closed) and opening it. The voted awards share
+// one amount, shown once in their heading.
+function prizesHtml() {
+  const total = PRIZES.reduce((sum, p) => sum + p.amount, 0);
+  const awards = PRIZES.filter((p) => p.award);
+  const tiles = PRIZES.filter((p) => p.place).map(
+    (p) => `<li><span class="medal ${p.place}"></span><span class="place">${t(p.place)}</span><span class="amount">${money(p.amount)}</span></li>`,
+  );
+  const rows = awards.map((p) => {
+    const a = votes?.awards.find((x) => x.id === p.award);
+    let vote = '';
+    if (a?.status === 'open') vote = a.mine ? `<span class="button small secondary">${t('voteDone')}</span>` : `<span class="button small">${t('vote')}</span>`;
+    else if (a?.status === 'closed' && a.winners.length) vote = `<span class="winner">${a.winners.map((c) => esc(teamText(c))).join(', ')}</span>`;
+    else if (a) vote = `<span class="status">${t(`voteStatus_${a.status}`)}</span>`;
+    return `<li><a class="prize-row" href="#vote/${p.award}"><span class="name">${t(`award_${p.award}`)}</span>${vote}</a></li>`;
+  });
+  return `
+    <section class="prizes">
+      <h2>${t('prizes')}<small>${money(total)}</small></h2>
+      <ul class="prize-tiles">${tiles.join('')}</ul>
+      <h3>${t('votedAwards')}<small>${t('eachPrize', { amount: money(awards[0].amount) })}</small></h3>
+      <ul class="prize-list panel">${rows.join('')}</ul>
+    </section>`;
+}
+
+// §5.7: the awards open for voting that this phone hasn't voted on yet, in a highlighted card at the top of Overview.
+function voteCallHtml() {
+  const open = votes?.awards.filter((a) => a.status === 'open' && !a.mine) ?? [];
+  if (!open.length) return '';
+  const rows = open.map((a) => `<li><span>${awardTitle(a)}</span><a class="button small" href="#vote/${a.id}">${t('vote')}</a></li>`);
+  return `<section class="vote-call"><h2>${t('voteCallTitle')}</h2><ul>${rows.join('')}</ul></section>`;
+}
+
+// §5.7: one award's vote, in a popup over Overview. It has its own address (#vote/<award>), so the phone's
+// Back button closes it and organizers can share a link straight to it.
+function voteSheet(id) {
+  const a = votes?.awards.find((x) => x.id === id);
+  const prize = PRIZES.find((p) => p.award === id);
+  return `
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(t(`award_${id}`))}" tabindex="-1">
+      <div class="sheet-head">
+        <span class="amount">${t('prizeValue', { amount: money(prize.amount) })}</span>
+        <button type="button" class="button small secondary" data-action="close-sheet">${t('close')}</button>
+      </div>
+      ${a ? awardCard(a) : `<p class="empty">${t('loading')}</p>`}
+      <p class="hint">${t('voteHint')}</p>
+    </div>`;
+}
+
+// Back to where the popup was opened from; a popup opened from a link outside the site goes to Overview.
+function closeSheet() {
+  if (history.state?.fromPage) history.back();
+  else location.replace('#');
+}
+
 // Admin: open, close or reopen each award.
 function awardControls() {
   if (!votes) return '';
@@ -361,16 +432,21 @@ const notFound = () => `${back()}<p class="note">${t('error_not_found')}</p>`;
 // ---------- Views ----------
 
 const views = {
+  // §10: an open vote first, then the prizes, then the matches; once the final and the 3rd-place match are
+  // both decided, the final results come before the prizes.
   overview() {
-    const { progress, matches } = state;
+    const { progress, matches, podium } = state;
     const next = matches.filter((m) => m.state === 'ready').slice(0, 4);
     const latest = matches.filter((m) => m.state === 'finished').reverse().slice(0, 4);
+    const decided = Boolean(podium.champion && podium.third);
     return `
       <section class="progress">
         <p>${t('progress', { done: progress.finished, total: progress.total })}</p>
         <div class="bar"><span style="width: ${(100 * progress.finished) / progress.total}%"></span></div>
       </section>
-      ${podiumHtml()}
+      ${voteCallHtml()}
+      ${decided ? podiumHtml() : ''}
+      ${prizesHtml()}
       ${cardList(t('liveNow'), matches.filter((m) => m.state === 'live'), t('noLive'))}
       ${next.length ? cardList(t('upNext'), next) : ''}
       ${latest.length ? cardList(t('latest'), latest) : ''}`;
@@ -442,6 +518,7 @@ const views = {
       <div class="admin-head">
         <h2>${t('adminTitle')}</h2>
         <div class="actions">
+          <a class="button small secondary" href="#history">${t('history')}</a>
           <a class="button small danger" href="#reset">${t('clearAll')}</a>
           <button type="button" class="button small secondary" data-action="logout">${t('logout')}</button>
         </div>
@@ -587,14 +664,6 @@ const views = {
     </div>`;
   },
 
-  // §5.7: the fan awards; anyone can vote while an award is open.
-  vote() {
-    if (!votes) return `<p class="empty">${t('loading')}</p>`;
-    return `
-      <section><h2>${t('vote')}</h2><p class="hint">${t('voteHint')}</p></section>
-      ${votes.awards.map(awardCard).join('')}`;
-  },
-
   // §5.6: the list of saved tournaments, newest first, or one saved copy (read-only).
   history(id) {
     if (id) return historyEntry(id);
@@ -614,6 +683,7 @@ const views = {
         </article>`;
     };
     return `
+      ${back()}
       <section>
         <h2>${t('history')}</h2>
         <p class="hint">${t('historyHint')}</p>
@@ -759,27 +829,34 @@ function checkScoreForm(form) {
 
 // ---------- Rendering and routing ----------
 
-function route() {
-  const [view, arg] = location.hash.slice(1).split('/');
+function route(hash = location.hash) {
+  const [view, arg] = hash.slice(1).split('/');
+  if (view === 'vote') return { view: 'overview', sheet: AWARD_IDS.includes(arg) ? arg : null };
   if (PUBLIC_VIEWS.includes(view)) return { view };
   if (ADMIN_VIEWS.includes(view) && view !== 'login') return pin ? { view, arg } : { view: 'login' };
   return { view: 'overview' };
 }
 
 function render({ fromPoll = false } = {}) {
-  const { view, arg } = route();
+  const { view, arg, sheet } = route();
   const key = `${view}/${arg ?? ''}`;
   document.documentElement.lang = lang;
   document.body.dataset.page = view; // lets the stylesheet adapt the referee's live screen
   document.querySelectorAll('[data-i18n]').forEach((el) => (el.textContent = t(el.dataset.i18n)));
   document.querySelectorAll('[data-i18n-label]').forEach((el) => el.setAttribute('aria-label', t(el.dataset.i18nLabel)));
   document.querySelectorAll('[data-i18n-title]').forEach((el) => (el.title = t(el.dataset.i18nTitle)));
-  const tab = view === 'history' ? 'history' : ADMIN_VIEWS.includes(view) ? 'admin' : view;
+  const tab = ADMIN_VIEWS.includes(view) ? 'admin' : view;
   document.querySelectorAll('nav [data-view]').forEach((a) => a.classList.toggle('active', a.dataset.view === tab));
-  document.querySelector('.more-toggle').classList.toggle('active', ['sponsors', 'vote', 'history'].includes(tab));
   document.querySelectorAll('nav [data-admin-only]').forEach((el) => (el.hidden = !pin));
   if (view === 'history' && (arg ? !historyEntries[arg] : historyList === null)) loadHistory(arg);
   if (!state) return;
+  // A red dot on Overview's tab while a match is live, so people on other tabs know there is something to watch.
+  const overviewTab = document.querySelector('nav [data-view="overview"]');
+  const live = state.matches.some((m) => m.state === 'live');
+  overviewTab.classList.toggle('has-live', live);
+  if (live) overviewTab.setAttribute('aria-label', `${t('navOverview')} · ${t('liveNow')}`);
+  else overviewTab.removeAttribute('aria-label');
+  renderSheet(sheet);
   const busy = typing || main.contains(document.activeElement) && document.activeElement.matches('input, select');
   if (fromPoll && FORM_VIEWS.includes(view) && rendered === key && busy) return;
 
@@ -793,16 +870,22 @@ function render({ fromPoll = false } = {}) {
   if (form) checkScoreForm(form);
 }
 
-// ---------- Events ----------
-
-// The "More" sub-menu closes on any click outside it, on Escape and on navigation.
-function closeMore() {
-  document.querySelector('.more-menu').hidden = true;
-  document.querySelector('.more-toggle').setAttribute('aria-expanded', 'false');
+function renderSheet(id) {
+  const html = id ? voteSheet(id) : '';
+  document.body.classList.toggle('sheet-open', Boolean(id));
+  if (html === sheetShown) return;
+  const opening = !sheetShown;
+  sheetShown = html;
+  sheetLayer.hidden = !id;
+  sheetLayer.innerHTML = html;
+  if (id && opening) sheetLayer.querySelector('.sheet').focus();
 }
 
+// ---------- Events ----------
+
 document.addEventListener('click', async (e) => {
-  if (!e.target.closest('.more')) closeMore();
+  if (e.target === sheetLayer) return closeSheet(); // a tap on the dimmed page around the popup
+  if (e.target.closest('a[href^="#vote/"]')) sheetLinkTapped = true;
   const el = e.target.closest('[data-action]');
   if (!el) return;
   const { action, id } = el.dataset;
@@ -819,10 +902,8 @@ document.addEventListener('click', async (e) => {
   if (action === 'cancel-confirm') {
     confirming = null;
     render();
-  } else if (action === 'more') {
-    const menu = document.querySelector('.more-menu');
-    menu.hidden = !menu.hidden;
-    el.setAttribute('aria-expanded', String(!menu.hidden));
+  } else if (action === 'close-sheet') {
+    closeSheet();
   } else if (action === 'lang') {
     lang = lang === 'vi' ? 'en' : 'vi';
     remember('lang', lang);
@@ -850,6 +931,7 @@ document.addEventListener('click', async (e) => {
     else await loadVotes(); // e.g. it was closed a moment ago: show its results
     if (!r.ok) setNotice(r.message, true);
     render();
+    sheetLayer.querySelector('[aria-pressed="true"]')?.focus(); // the popup was redrawn; keep the place
   } else if (action === 'award-status') {
     const r = await send('PUT', `/api/awards/${el.dataset.award}`, { status: el.dataset.status });
     if (r.ok) votes = r.data;
@@ -900,6 +982,7 @@ document.addEventListener('submit', async (e) => {
       return;
     }
     state = res.data;
+    changes++;
     flipped.clear();
     remember('flipped', null);
     historyList = null;
@@ -942,19 +1025,22 @@ document.addEventListener('input', (e) => {
   if (form) checkScoreForm(form);
 });
 
-window.addEventListener('hashchange', () => {
-  closeMore();
+window.addEventListener('hashchange', (e) => {
   confirming = null;
   typing = false;
   if (location.hash === '#history') historyList = null;
   if (tapping.match !== route().arg) tapping = idleTapping();
+  // A popup opened from this page marks its history entry, so closing it can go back instead of adding a step.
+  if (sheetLinkTapped && route().sheet) history.replaceState({ fromPage: true }, '');
+  sheetLinkTapped = false;
   render();
-  window.scrollTo(0, 0);
+  // Opening or closing a popup leaves Overview where it was.
+  if (!route().sheet && !route(new URL(e.oldURL).hash).sheet) window.scrollTo(0, 0);
   refresh(); // fetch the latest data at once, e.g. a result another organizer just entered
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeMore();
+  if (e.key === 'Escape' && route().sheet) closeSheet();
 });
 
 // Remember which groups' match lists are open, so a poll's re-render doesn't fold them away again.

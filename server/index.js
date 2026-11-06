@@ -113,7 +113,8 @@ export function createApp({ db, seed, pin, now = Date.now }) {
   // §5.7: fan votes. Anyone can vote while an award is open; organizers open and close the awards.
   const VOTER = /^[0-9a-f]{32}$/; // the random id each phone makes for itself
   const votes = (voter) => ({ awards: voteSummary({ teams: seed.teams, ...db.votesInput(voter) }) });
-  app.get('/api/votes', (req, res) => res.json(votes(VOTER.test(req.query.voter) ? req.query.voter : null)));
+  // Overview polls this with the state, so it is revalidated the same way: an unchanged reply is an empty 304.
+  app.get('/api/votes', (req, res) => res.set('Cache-Control', 'no-cache').json(votes(VOTER.test(req.query.voter) ? req.query.voter : null)));
   app.put('/api/votes/:award', (req, res) => {
     const { voter, team } = req.body ?? {};
     if (!AWARDS.includes(req.params.award)) return res.status(404).json({ error: 'not_found' });

@@ -55,6 +55,8 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Trueson 1st Badminton Championship' })).toBeVisible();
     await expect(page.getByText('Đã đấu 0/13 trận')).toBeVisible();
+    // Before the final results: the prizes under the progress, then the matches; no final results yet.
+    await expect(page.locator('main h2')).toHaveText([/^Giải thưởng/, 'Đang thi đấu', 'Trận sắp tới']);
     await expect(page.getByRole('link', { name: 'Tổng quan' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Quản lý' })).toBeHidden();
   });
@@ -74,7 +76,7 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
     await page.getByLabel('PIN').fill(PIN);
     await page.getByRole('button', { name: 'Log in' }).click();
     await expect(page.getByRole('heading', { name: 'Enter results' })).toBeVisible();
-    await expect(page.locator('nav.tabs > a, .more-toggle')).toHaveText(['Overview', 'Admin', 'Groups', 'Knockout', 'More']);
+    await expect(page.locator('nav.tabs > a')).toHaveText(['Overview', 'Admin', 'Groups', 'Knockout', 'Sponsors']);
     expect(await tabsFit(page)).toBe(true);
   });
 
@@ -139,6 +141,8 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
     await typeScore(page, 'SF2', [[19, 21]], 'Lưu kết quả');
     await expect(page.locator('[data-match="G1"] .lock-dot')).toHaveAttribute('title', 'Đã khóa vì Bán kết 1, Bán kết 2 đã có kết quả.');
     await typeScore(page, 'FINAL', [[15, 12], [13, 15], [16, 14]], 'Lưu kết quả');
+    await page.goto('/');
+    await expect(page.locator('.podium')).toHaveCount(0); // the 3rd-place match isn't decided yet
     await page.goto('/#edit/THIRD');
     await page.getByRole('button', { name: `${NAME.B1} thắng W/O` }).click();
     await expect(page.locator('.confirm')).toContainText(`Ghi nhận ${NAME.B1} thắng W/O?`);
@@ -151,6 +155,8 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
     await page.getByRole('button', { name: 'Đăng xuất' }).click();
     await expect(page.getByRole('link', { name: 'Quản lý' })).toBeHidden();
     await expect(page.getByText('Đã đấu 13/13 trận')).toBeVisible();
+    // After the final results: they come first, under the progress, then the prizes.
+    await expect(page.locator('main h2')).toHaveText(['Kết quả chung cuộc', /^Giải thưởng/, 'Đang thi đấu', 'Kết quả mới nhất']);
     await expect(page.locator('.podium li')).toHaveText([new RegExp(`Vô địch\\s*${NAME.A1}`), new RegExp(`Giải Nhì\\s*${NAME.A3}`), new RegExp(`Giải Ba\\s*${NAME.B1}`)]);
     // Gold, silver and bronze.
     const colours = await page.locator('.podium li').evaluateAll((items) => items.map((li) => getComputedStyle(li).backgroundColor));
@@ -158,24 +164,17 @@ test('a whole tournament on a phone, in both languages', async ({ page }) => {
   });
 });
 
-test('sponsors: logos next to the Trueson logo, and a page under More', async ({ page }) => {
+test('sponsors: logos next to the Trueson logo, and the last tab of the menu', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.sponsor-logos img')).toHaveCount(2);
   for (const name of ['Anh Sơn Movement', 'Kenichi Miyoshi']) await expect(page.getByRole('img', { name })).toBeVisible();
   expect(await tabsFit(page)).toBe(true);
+  await expect(page.locator('nav.tabs > a:visible')).toHaveText(['Tổng quan', 'Vòng bảng', 'Loại trực tiếp', 'Tài trợ']);
 
-  await page.getByRole('button', { name: 'Thêm' }).click();
-  await expect(page.locator('.more-menu')).toBeVisible();
-  await expect(page.locator('.more-menu a:visible')).toHaveText(['Nhà tài trợ', 'Bình chọn']); // History is for organizers only
-  await page.keyboard.press('Escape');
-  await expect(page.locator('.more-menu')).toBeHidden();
-
-  await page.getByRole('button', { name: 'Thêm' }).click();
-  await page.locator('.more-menu').getByRole('link', { name: 'Nhà tài trợ' }).click();
+  await page.locator('nav').getByRole('link', { name: 'Tài trợ' }).click();
   await expect(page.getByRole('heading', { name: 'Nhà tài trợ' })).toBeVisible();
   await expect(page.locator('.sponsor strong')).toHaveText(['Anh Sơn Movement', 'Kenichi Miyoshi']);
-  await expect(page.locator('.more-menu')).toBeHidden();
-  await expect(page.locator('.more-toggle')).toHaveClass(/active/);
+  await expect(page.locator('nav [data-view="sponsors"]')).toHaveClass(/active/);
 
   await page.goto('/');
   await page.locator('header .sponsor-logos').click(); // the sponsors' logos lead there too
@@ -191,8 +190,8 @@ test('clearing every result needs the PIN typed again', async ({ page }) => {
   await page.goto('/#admin');
   await page.getByLabel('Mã PIN').fill(PIN);
   await page.getByRole('button', { name: 'Đăng nhập' }).click();
-  // "Xóa tất cả" sits at the top of the admin page, next to "Đăng xuất".
-  await expect(page.locator('.admin-head .actions > *')).toHaveText(['Xóa tất cả', 'Đăng xuất']);
+  // "Lịch sử" and "Xóa tất cả" sit at the top of the admin page, next to "Đăng xuất".
+  await expect(page.locator('.admin-head .actions > *')).toHaveText(['Lịch sử', 'Xóa tất cả', 'Đăng xuất']);
   await page.getByRole('link', { name: 'Xóa tất cả' }).click();
   await expect(page.getByRole('heading', { name: 'Xóa toàn bộ kết quả' })).toBeVisible();
 
@@ -201,17 +200,32 @@ test('clearing every result needs the PIN typed again', async ({ page }) => {
   await expect(page.getByRole('alert')).toHaveText('Sai mã PIN.');
   await expect(page.getByRole('link', { name: 'Quản lý' })).toBeVisible(); // still logged in
 
+  // A refresh that fetched the old results just before the clear, but only arrives after it, must not bring
+  // them back (a slow phone connection while the page refreshes).
+  let release;
+  const held = new Promise((resolve) => (release = resolve));
+  await page.route('**/api/state', async (route) => {
+    const old = await route.fetch();
+    await held;
+    await route.fulfill({ response: old });
+  }, { times: 1 });
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); // starts a refresh
   await page.getByLabel('Nhập lại mã PIN để xác nhận').fill(PIN);
   await page.getByRole('button', { name: 'Xóa toàn bộ', exact: true }).click();
   await expect(page).toHaveURL(/#admin$/);
   await expect(page.getByText('Đã xóa toàn bộ kết quả.')).toBeVisible();
+  const late = page.waitForResponse('**/api/state');
+  release();
+  await late;
+  await expect(page.locator('[data-match="FINAL"] .badge')).toHaveText('Chờ xác định đội');
   await expect(page.getByText('Kết quả cũ đã được lưu vào Lịch sử.')).toBeVisible();
   await page.getByRole('link', { name: 'Tổng quan' }).click();
   await expect(page.getByText('Đã đấu 0/13 trận')).toBeVisible();
 
-  // The cleared tournament is the newest entry in History (under Thêm), as a read-only copy.
-  await page.getByRole('button', { name: 'Thêm' }).click();
-  await page.locator('.more-menu').getByRole('link', { name: 'Lịch sử' }).click();
+  // The cleared tournament is the newest entry in History (on the admin page), as a read-only copy.
+  await page.getByRole('link', { name: 'Quản lý' }).click();
+  await page.locator('.admin-head').getByRole('link', { name: 'Lịch sử' }).click();
+  await expect(page.locator('nav [data-view="admin"]')).toHaveClass(/active/);
   const newest = page.locator('.history-item').first();
   await expect(newest).toContainText(`Vô địch: ${NAME.A1}`);
   await expect(newest).toContainText('Đã đấu 13/13 trận');

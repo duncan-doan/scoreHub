@@ -82,7 +82,7 @@ Run the `rsync` command from step 4 again, then on the droplet:
 cd /opt/badminton && docker compose up -d --build
 ```
 
-Results in `data/` are kept. After changing `.env`, run `docker compose up -d`; a plain restart doesn't pick up the new PIN.
+Results in `data/` are kept. To move the planned match times (for example a later start), change `"start"` in the `schedule` line at the top of `server/seed.json` and update the same way. After changing `.env`, run `docker compose up -d`; a plain restart doesn't pick up the new PIN.
 
 ## Back up and restore
 
@@ -111,7 +111,7 @@ docker compose up -d
 
 ## Reset after the rehearsal
 
-On the admin page, tap **Xóa tất cả** (Clear All) and type the PIN again. The rehearsal is saved in **Thêm ▾ → Lịch sử** (History) and as a backup file first. Delete the rehearsal's History entry there if you don't want to keep it. Clear All also removes every vote and sets the three awards back to “not open yet”.
+On the admin page, tap **Xóa tất cả** (Clear All) and type the PIN again. The rehearsal is saved in **Lịch sử** (History, the button next to Clear All) and as a backup file first. Delete the rehearsal's History entry there if you don't want to keep it. Clear All also removes every vote and sets the three awards back to “not open yet”.
 
 ## Never on this droplet
 

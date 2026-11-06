@@ -1,4 +1,5 @@
 {
+  "schedule": {"start": "14:30", "courts": 2, "minutes": {"group": 15, "semifinal": 15, "third_place": 25, "final": 25}},
   "teams": [
     {"code": "A1", "name": "Duyen – Khai", "group": "A"},
     {"code": "A2", "name": "Trieu – Dat", "group": "A"},

@@ -33,6 +33,27 @@ const EX6 = { G2: [21, 15], G3: [21, 17] };
 // Both groups complete: 1st A = A1, 2nd A = A3, 1st B = B1, 2nd B = B2.
 const GROUPS_DONE = { ...EX1, ...EX3 };
 
+describe('§3 planned times', () => {
+  test('two courts from 14:30; each stage waits for the one before, so G9 and the final play alone', () => {
+    const plan = Object.fromEntries(computeState(seed).matches.map((m) => [m.id, `${m.plan.time} court ${m.plan.court}`]));
+    assert.deepEqual(plan, {
+      G1: '14:30 court 1', G2: '14:30 court 2',
+      G3: '14:45 court 1', G4: '14:45 court 2',
+      G5: '15:00 court 1', G6: '15:00 court 2',
+      G7: '15:15 court 1', G8: '15:15 court 2',
+      G9: '15:30 court 1',
+      SF1: '15:45 court 1', SF2: '15:45 court 2',
+      THIRD: '16:00 court 1',
+      FINAL: '16:25 court 1',
+    });
+  });
+
+  test('a later start moves every match by the same amount', () => {
+    const later = computeState({ ...seed, schedule: { ...seed.schedule, start: '15:05' } }).matches;
+    assert.deepEqual([later[0].plan, later.at(-1).plan], [{ time: '15:05', court: 1 }, { time: '17:00', court: 1 }]);
+  });
+});
+
 describe('§4 valid scores', () => {
   test('21-point sets', () => {
     for (const s of [[21, 0], [21, 19], [22, 20], [29, 27], [30, 28], [30, 29], [19, 21]]) assert.ok(isFinishedSet(s, ONE_SET), `${s}`);

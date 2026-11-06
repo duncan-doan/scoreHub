@@ -8,7 +8,7 @@ Score notation is always **team1–team2**, in the order the match is listed in 
 
 The app records match scores, works out group standings, qualifiers, the knockout bracket and the podium, and shows them to everyone. Organizers enter scores, either typed after the match or live point by point.
 
-Out of scope: user accounts, match times or courts, more than one tournament, a team-management screen, exports, HTTPS.
+Out of scope: user accounts, match times that follow how the day actually runs (the planned times in §3 are fixed), more than one tournament, a team-management screen, exports, HTTPS.
 
 ## 2. Teams and groups
 
@@ -29,6 +29,19 @@ Renaming a team (e.g. a substitution) means editing `seed.json` and redeploying.
 ## 3. Matches
 
 13 matches. Group matches can be played in any order; `order` only sets the display order.
+
+**Planned times.** Each match has a planned start time and court, worked out from `schedule` in `server/seed.json`: start at 14:30 on 2 courts, 15 minutes per 1-set match (group, semifinal) and 25 per best-of-3 (3rd place, final). In `order`, each match takes the court that is free first (court 1 on a tie), and each stage starts only once every match of the stage before it has ended, so the semifinals wait for both groups and the final is played alone after the 3rd-place match. The plan is fixed: it doesn't move when matches run early or late. A different start time or slot length means editing `schedule` and redeploying.
+
+| Time | Court 1 | Court 2 |
+|---|---|---|
+| 14:30 | G1 | G2 |
+| 14:45 | G3 | G4 |
+| 15:00 | G5 | G6 |
+| 15:15 | G7 | G8 |
+| 15:30 | G9 | — |
+| 15:45 | SF1 | SF2 |
+| 16:00 | THIRD | — |
+| 16:25 | FINAL (ends about 16:50) | — |
 
 | Id | Stage | Team 1 | Team 2 |
 |---|---|---|---|
@@ -116,7 +129,7 @@ An organizer can clear every result and draw at once, with the “Xóa tất c�
 
 Organizers can look back at every tournament that was cleared.
 
-- **Where:** “Lịch sử” (History) under the “Thêm” (More) menu, shown only after logging in. The server gives History only to requests with the PIN, so spectators can't open it by typing its address either.
+- **Where:** the “Lịch sử” (History) button at the top of the admin page, next to “Xóa tất cả” (Clear All), so only after logging in. The server gives History only to requests with the PIN, so spectators can't open it by typing its address either.
 - **The list:** newest first. Each entry shows when it was cleared (date and time; entries have no name), the champion if there was one, and how many matches had been played.
 - **One entry:** a read-only copy of the tournament exactly as it was: podium, final, 3rd-place match, semi-finals, both group tables and every match score. Nothing in it can be edited. A match that was still being played shows as “Chưa xong” (not finished).
 - **Deleting:** organizers can delete an entry (for example the rehearsal) after confirming. Deleted entries can't be brought back from the app, though the backup files from §5.5 remain.
@@ -127,10 +140,10 @@ Organizers can look back at every tournament that was cleared.
 
 Spectators vote for three awards: **Pha cầu đẹp nhất** (Best rally), **Đội được yêu thích nhất** (Fan favourite) and **Đội Fair Play** (Fair play).
 
-- **Where:** “Bình chọn” (Vote) under the “Thêm” (More) menu, open to everyone, no login.
+- **Where:** on Overview, in the prizes (§10), and in a highlighted “Bình chọn đang mở” (Voting is open) card at the top of Overview while an award is open and this phone hasn't voted on it yet; the card goes once it has voted on every open award. Tapping an award opens its vote in a popup over the page, open to everyone, no login. The popup has its own address (`#vote/best_rally`, `#vote/fan_favourite`, `#vote/fair_play`): the phone's Back button, the Close button, Escape and a tap outside it close it, and organizers can share the link to open a vote directly.
 - **What is voted for:** one of the 7 teams, for each award, including Best rally (the team that played it).
 - **One vote per phone:** each browser makes a random voter id the first time and keeps it. It has one vote per award and can change it while the award is open; the latest choice counts. Clearing the browser's data or using another browser gives a new id, so this stops accidents, not someone determined to vote twice.
-- **Opening and closing:** organizers open and close each award separately, at the bottom of the Vote page and on the admin page. An award starts “Chưa mở” (not open yet); a closed award can be reopened.
+- **Opening and closing:** organizers open and close each award separately, on the admin page. An award starts “Chưa mở” (not open yet); a closed award can be reopened.
 - **While open:** everyone sees how many votes have been cast in total, and their own choice, but not the count for each team.
 - **Once closed:** everyone sees the winner (or the tied winners) and every team's count. Votes sent after closing are refused (`voting_closed`).
 - **Clear All:** removes every vote and returns all three awards to “not open yet”, after saving them in History (§5.6).
@@ -291,7 +304,8 @@ Locked (§7) is a flag on top of these states.
 - **Look:** Trueson colours taken from `icons/TS_logo.png` (black `#1a171b`, gold `#cbbb9d`), always light. Gold never carries text on white.
 - **Logos:** the Trueson logo and the sponsors' logos sit together at the top of every page, with the sponsors' set apart by a thin rule. Tapping the Trueson logo returns to Overview; tapping the sponsors' logos opens the Sponsors page. The Anh Sơn Movement logo is square, so it is shown taller than the wide Kenichi Miyoshi logo.
 - **Width:** on a wide screen the header and the menu line up with the page's centred column, instead of starting at the left edge of the window.
-- **Menu:** Tổng quan · Quản lý (organizers only) · Vòng bảng · Loại trực tiếp · Thêm ▾. “Thêm” (More) opens a sub-menu with Nhà tài trợ (Sponsors) and Bình chọn (Vote), plus Lịch sử (History) for organizers. On a phone the items share the width: all five fit from 360px wide, and on a 320px phone the Vietnamese labels end in “…”.
+- **Menu:** Tổng quan · Quản lý (organizers only) · Vòng bảng · Loại trực tiếp · Tài trợ, every page one tap away. The Sponsors tab is labelled “Tài trợ” so the organizers' five tabs fit; its page is headed “Nhà tài trợ”. On a phone the items share the width: all five fit from 360px wide, and on a 320px phone the Vietnamese labels end in “…”.
+- **Live dot:** while any match is live, a red dot sits in the corner of the Tổng quan tab, so people on other tabs know there is something to watch.
 - **Admin access:** spectators see no login button. Organizers open `#admin` (for example `http://<droplet-ip>:8080/#admin`) and enter the PIN once; an Admin tab then appears next to Overview.
 - **Languages:** Vietnamese (the default) and English, with a compact “EN” / “VI” button in the header, showing the language it switches to; each browser remembers the choice. Every interface string exists in both languages in `public/i18n.js`.
 - **Devices:** designed for phones first, held upright or sideways, and works on tablets and desktop.
@@ -300,13 +314,15 @@ Locked (§7) is a flag on top of these states.
   - `tests/ui/responsive.spec.js` checks every page at 17 sizes in both languages, including heights reduced by the browser's address bar.
 - **Search engines:** every page asks not to be indexed, because player names are on a public address.
 - **Views:**
-  - Overview: progress (x of 13), live matches with score and serving side, upcoming matches, and the podium once decided, in gold, silver and bronze.
-  - Groups: standings for A and B with Played, W, L, PF, PA and PD; qualifiers marked once the group is complete; tie and draw flags. Each group's matches are folded under “Các trận đấu (n)” and open on a tap; an opened list stays open while the page refreshes.
+  - Overview, during the tournament: progress (x of 13), the open-vote card (§5.7) if there is one, the prizes, live matches with score and serving side, upcoming matches, then the latest results. There is no final-results box yet, not even when only the final or only the 3rd-place match is decided.
+  - Overview, once the final and the 3rd-place match are both decided: progress (13 of 13), the open-vote card if there is one, the final results in gold, silver and bronze, the prizes, then live and latest matches.
+  - Prizes, on Overview, from `public/prizes.js`, headed “Giải thưởng” with the 2,000,000 ₫ total. The podium's prizes are three tiles side by side, each with its medal colour, place and amount: Vô địch (Champion) 700,000 ₫, Giải Nhì (Runner-up) 400,000 ₫, Giải Ba (3rd place) 300,000 ₫. Below them, “Giải bình chọn · 200.000 ₫ mỗi giải” (Voted awards, 200,000 ₫ each) lists the three voted awards (§5.7), one line each, ending with where its vote stands: a “Bình chọn” (Vote) button, “✓ Đã chọn” (Voted) once this phone has voted, “Chưa mở” (not open yet), or the winner once closed; tapping the line opens its vote.
+  - Groups: standings for A and B with Played, W, L, PF, PA and PD, those six columns the same width on screens 400px wide or more (narrower phones have no room to spare) and with as much room after PD as before #; qualifiers marked once the group is complete; tie and draw flags. Each group's matches are folded under “Các trận đấu (n)” and open on a tap; an opened list stays open while the page refreshes.
   - Knockout: the final first, then the 3rd-place match, then the semifinals.
   - Score entry (organizers): typed sets, live scoring with +1 and Undo, walkover, clear, and clear everything (§5.5). In the list a locked match (§7) shows a red dot, explained once at the bottom of the page; the reason shows on hover and on the match's own page.
-  - Vote, under Thêm: the three awards (§5.7), and for organizers the buttons that open and close them.
-  - Sponsors, under Thêm: each sponsor's logo and name, with a thank-you line and buttons for the sponsor's Facebook page and website, which open in a new tab. The list is in `public/sponsors.js`: Anh Sơn Movement and Kenichi Miyoshi. The original logos are in `icons/`.
-- **Refresh:** every 3 s while any match is Live, every 15 s otherwise, and only while the tab is visible. The browser keeps its last copy of the state and checks it on each refresh; when nothing has changed the server answers with an empty “not modified”, and when something has, the state comes compressed (about 1 KB).
+  - Sponsors, the last tab: each sponsor's logo and name, with a thank-you line and buttons for the sponsor's Facebook page and website, which open in a new tab. The list is in `public/sponsors.js`: Anh Sơn Movement and Kenichi Miyoshi. The original logos are in `icons/`.
+- **Planned time:** every match card that hasn't started yet (not live, no result) shows its planned time and court (§3) in small italics next to the match's name: “Trận 1 · Dự kiến 14:30 · Sân 1” / “Match 1 · Planned 14:30 · Court 1”. Where that and the state don't fit on one line, the state moves to a second line, still on the right. History's copies don't show it.
+- **Refresh:** every 3 s while any match is Live, every 15 s otherwise, and only while the tab is visible. The browser keeps its last copy of the state and checks it on each refresh; when nothing has changed the server answers with an empty “not modified”, and when something has, the state comes compressed (about 1 KB). A refresh that was already on its way when the organizer's own change (a result, a clear, Clear All) landed is ignored, so it can't bring back data that change removed.
 - **Live taps:** each tap shows whether it was saved. A failed tap says so and retries.
 
 ### API
@@ -407,3 +423,10 @@ All agreed with the organizer on 3 November 2026. Change a decision here first, 
 | D33 | Organizers open and close each award; counts per team stay hidden while open; winner and counts shown to everyone once closed | §5.7 |
 | D34 | Header and menu centred on wide screens; language button is a compact EN / VI; the square Anh Sơn logo is shown larger | §10 |
 | D35 | The state is gzipped and revalidated with an ETag instead of sent in full on every refresh | §10 |
+| D36 | Prizes of 2,000,000 ₫ in all (700,000 / 400,000 / 300,000 for the podium, 200,000 for each voted award), listed on Overview (placement replaced by D40) | §10 |
+| D37 | Voting moves from its own page to Overview: each award's row opens a popup with its own address | §5.7 |
+| D38 | Flat menu without “Thêm”: Sponsors is the last tab; History is a button on the admin page (replaces D22's sub-menu) | §10 |
+| D39 | A red dot on the Tổng quan tab while a match is live | §10 |
+| D40 | Overview order: during the tournament, prizes after Live now and Up next, no final-results box; once the final and 3rd-place match are decided, final results under the progress, then prizes. Each prize on one line (prizes placement and look replaced by D42) | §10 |
+| D41 | Planned start time and court on every match not started yet: from 14:30 on 2 courts, 15 / 25 min slots, the final alone after the 3rd-place match; fixed, not adjusted for delays | §3, §10 |
+| D42 | Prizes under the progress (under the final results once decided): the podium's as three medal tiles, the voted awards as a list with their shared amount in its heading. While this phone has an open vote to cast, a highlighted card at the top of Overview leads to it | §5.7, §10 |

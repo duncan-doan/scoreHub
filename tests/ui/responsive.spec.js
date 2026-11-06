@@ -10,7 +10,7 @@ const SIZES = [
   [320, 568], [360, 640], [375, 553], [375, 667], [390, 664], [412, 915], [430, 932], [768, 1024],
   [568, 320], [667, 320], [667, 375], [740, 360], [844, 340], [844, 390], [932, 430], [1024, 768], [1280, 800],
 ];
-const VIEWS = ['', '#groups', '#knockout', '#sponsors', '#vote', '#admin', '#edit/FINAL', '#edit/G1', '#live/FINAL', '#live/THIRD', '#reset'];
+const VIEWS = ['', '#groups', '#knockout', '#sponsors', '#vote/fan_favourite', '#admin', '#edit/FINAL', '#edit/G1', '#live/FINAL', '#live/THIRD', '#reset'];
 // Both groups done (SPEC §6.4 Examples 1 and 3) and both semifinals typed, so the final can be scored live.
 const TYPED = { G1: [21, 15], G2: [21, 19], G3: [15, 21], G4: [21, 18], G5: [10, 21], G6: [21, 5], G7: [19, 21], G8: [21, 19], G9: [21, 8], SF1: [21, 15], SF2: [19, 21] };
 
@@ -26,6 +26,12 @@ test.beforeAll(async ({ request }) => {
   points.push(...[1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1]);
   for (const [count, side] of points.entries()) {
     expect((await request.post('/api/matches/FINAL/point', { headers: HEADERS, data: { side, count } })).ok()).toBe(true);
+  }
+  // One vote open (Overview highlights it) and one closed with a winner, so their longest texts are checked too.
+  const award = (id, status) => request.put(`/api/awards/${id}`, { headers: HEADERS, data: { status } });
+  for (const res of [await award('fan_favourite', 'open'), await award('best_rally', 'open'),
+    await request.put('/api/votes/best_rally', { data: { voter: 'f'.repeat(32), team: 'B1' } }), await award('best_rally', 'closed')]) {
+    expect(res.ok()).toBe(true);
   }
 });
 
@@ -44,7 +50,7 @@ function layoutProblems(checkLabels) {
     if (r.width && (r.right > width + 1 || r.left < -1)) problems.push(`${el.tagName.toLowerCase()}.${el.className} sticks out (${Math.round(r.left)}–${Math.round(r.right)})`);
   }
   if (checkLabels) {
-    for (const el of document.querySelectorAll('.tabs > a:not([hidden]), .more-toggle, .button, .pill, .social')) {
+    for (const el of document.querySelectorAll('.tabs > a:not([hidden]), .button, .pill, .social')) {
       if (el.scrollWidth > el.clientWidth + 1) problems.push(`label cut off: "${el.textContent.trim()}"`);
     }
   }

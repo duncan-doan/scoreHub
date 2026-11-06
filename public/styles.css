@@ -38,7 +38,7 @@ body { margin: 0; min-height: 100vh; background: var(--bg); }
 [hidden] { display: none !important; }
 :focus-visible { outline: 3px solid var(--live); outline-offset: 2px; }
 h2 { margin: 0 0 10px; font-size: 1.1rem; }
-h2 small { margin-left: 8px; font-size: 0.8rem; font-weight: 400; color: var(--muted); }
+h2 small, h3 small { margin-left: 8px; font-size: 0.8rem; font-weight: 400; color: var(--muted); }
 h3 { margin: 0; font-size: 1rem; }
 p { margin: 0; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -73,29 +73,23 @@ p { margin: 0; }
   background: var(--surface); border-bottom: 1px solid var(--line);
 }
 /* Organizers see five items: on a phone they share the width and the text shrinks a little to fit 360px. */
-.tabs > a, .more-toggle {
-  flex: 1 1 auto; min-width: 0; padding: 12px 6px 9px; border: 0; border-bottom: 3px solid transparent;
+.tabs > a {
+  position: relative; flex: 1 1 auto; min-width: 0; padding: 12px 6px 9px; border: 0; border-bottom: 3px solid transparent;
   background: none; color: var(--muted); font: inherit; font-size: clamp(0.78rem, 3.4vw, 1rem); font-weight: 600;
   text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; cursor: pointer;
 }
 @media (min-width: 640px) {
-  .tabs > a, .more-toggle { flex: none; padding-inline: 14px; }
+  .tabs > a { flex: none; padding-inline: 14px; }
   /* Tab labels line up with the page content below (720px column, 16px padding, 14px tab padding). */
   .tabs { padding-left: max(8px, env(safe-area-inset-left), calc(50% - 358px)); padding-right: max(8px, env(safe-area-inset-right), calc(50% - 358px)); }
 }
 @media (max-width: 400px) {
   .tabs { padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
-  .tabs > a, .more-toggle { padding-inline: 4px; }
+  .tabs > a { padding-inline: 4px; }
 }
-.tabs > a.active, .more-toggle.active { color: var(--brand); border-bottom-color: var(--brand); }
-.more { position: relative; display: flex; flex: 0 0 auto; }
-.more-toggle::after { content: ""; display: inline-block; margin-left: 4px; border: 4px solid transparent; border-top-color: currentColor; border-bottom-width: 0; vertical-align: 2px; }
-.more-menu {
-  position: absolute; top: 100%; right: 0; z-index: 6; display: grid; min-width: 180px; padding: 6px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgb(26 23 27 / 0.12);
-}
-.more-menu a { padding: 10px 12px; border-radius: 6px; color: var(--ink); font-weight: 600; text-decoration: none; }
-.more-menu a.active { background: var(--brand-soft); }
+.tabs > a.active { color: var(--brand); border-bottom-color: var(--brand); }
+/* A match is live: a red dot in the corner of Overview's tab, taking no room from the labels. */
+.tabs > a.has-live::after { content: ""; position: absolute; top: 7px; right: 1px; width: 7px; height: 7px; border-radius: 50%; background: var(--live); }
 
 main {
   display: grid; gap: 20px; max-width: 720px; margin: 0 auto;
@@ -108,8 +102,13 @@ section { min-width: 0; }
 @media (min-width: 640px) { .cards { grid-template-columns: 1fr 1fr; } }
 .match { display: grid; gap: 6px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
 .match.is-live { border-color: var(--live); box-shadow: inset 0 0 0 1px var(--live); }
-.match header { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8rem; color: var(--muted); }
+.match header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; font-size: 0.8rem; color: var(--muted); }
 .badge { font-weight: 600; }
+/* The planned time sits right after the match's name; if the line is too narrow, the state drops below, still on the right. */
+.match header > span:first-child { font-weight: 700; } /* the match's name */
+.match header .plan { margin: 0 auto 0 -4px; font-size: 0.75rem; font-style: italic; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.match header .plan::before { content: "·"; padding-right: 4px; }
+.match header .badge { margin-left: auto; }
 .is-live .badge { color: var(--live); }
 .is-finished .badge { color: var(--brand); }
 .side { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -141,6 +140,13 @@ section { min-width: 0; }
 .standings th { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
 .standings th:first-child, .standings td:first-child { width: 2em; text-align: center; }
 .standings th:nth-child(2), .standings td.team { text-align: left; white-space: normal; }
+.standings th:last-child, .standings td:last-child { padding-right: 14px; } /* as much room right of PD as left of # */
+/* P, W, L, PF, PA and PD the same width, the spare width going to Team. Below 400px there is none to spare,
+   so each column takes only what its numbers need. PD's extra 10px is the room after it. */
+@media (min-width: 400px) {
+  .standings th:nth-child(n+3), .standings td:nth-child(n+3) { width: 2.25rem; padding-left: 4px; padding-right: 4px; }
+  .standings th:last-child, .standings td:last-child { width: calc(2.25rem + 10px); padding-right: 14px; }
+}
 .standings tr.qualified td { background: var(--brand-soft); }
 .rank { display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; border-radius: 50%; }
 .qualified .rank, .rank-key { background: var(--brand-gold); color: var(--brand); font-weight: 700; }
@@ -234,7 +240,7 @@ input, select { min-width: 0; padding: 10px 12px; border: 1px solid var(--line);
   .sponsor-logos img[data-shape="square"] { height: 38px; }
   .top h1 { font-size: 1rem; }
   .top p, .live .hint { display: none; }
-  .tabs > a, .more-toggle { padding-top: 8px; padding-bottom: 6px; }
+  .tabs > a { padding-top: 8px; padding-bottom: 6px; }
   main { gap: 12px; padding-top: 10px; }
   .live { gap: 8px; }
   .court { min-height: 0; padding: 8px; }
@@ -302,3 +308,52 @@ input:disabled { background: var(--bg); color: var(--muted); }
 .award-controls { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
 .award-controls li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .award-controls li:last-child { border-bottom: 0; }
+
+/* Overview: the voted awards (§10), one line each: the name, then where its vote stands. The rows share the
+   columns (subgrid), so the states line up. A row opens its vote. */
+.prize-list { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; margin: 0; padding: 0; list-style: none; }
+.prize-list > li { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-columns: subgrid; border-bottom: 1px solid var(--line); }
+.prize-list > li:last-child { border-bottom: 0; }
+.prize-row {
+  grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-columns: subgrid;
+  align-items: center; min-height: 52px; padding: 6px 14px; color: inherit; text-decoration: none;
+}
+.prize-row .name { display: flex; align-items: center; font-weight: 600; }
+.prize-row .status { font-size: 0.85rem; color: var(--muted); text-align: right; }
+.prize-row .winner { max-width: 9em; font-size: 0.9rem; font-weight: 700; text-align: right; }
+.prize-row > :not(.name) { justify-self: end; } /* the vote's state */
+/* The podium's prizes as three tiles side by side, above the voted awards. */
+.prize-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; }
+.prize-tiles li { display: grid; justify-items: center; gap: 2px; padding: 12px 4px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); text-align: center; }
+.prize-tiles .medal { width: 18px; height: 18px; margin: 0 0 4px; }
+.prize-tiles .place { font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+.prize-tiles .amount { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.prizes h3 { margin-bottom: 8px; }
+/* §5.7: a vote this phone can still cast, at the top of Overview. */
+.vote-call { padding: 12px 14px; background: var(--brand-soft); border: 2px solid var(--gold); border-radius: var(--radius); }
+.vote-call h2 { margin-bottom: 6px; }
+.vote-call ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.vote-call li { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; }
+.vote-call .button { flex: none; white-space: nowrap; } /* on a narrow phone the award's name wraps, not the button */
+.medal { flex: none; width: 12px; height: 12px; margin-right: 8px; border-radius: 50%; }
+.medal.champion { background: var(--gold); }
+.medal.runnerUp { background: var(--silver); }
+.medal.third { background: var(--bronze); }
+
+/* The vote popup: slides up from the bottom on a phone, centred on a wide screen. */
+body.sheet-open { overflow: hidden; }
+.sheet-layer { position: fixed; inset: 0; z-index: 30; display: grid; align-items: end; justify-items: center; background: rgb(26 23 27 / 0.55); }
+.sheet-layer[hidden] { display: none; }
+.sheet {
+  display: grid; gap: 12px; width: min(100%, 560px); max-height: 90vh; max-height: 90dvh; overflow-y: auto;
+  padding: 14px max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: var(--surface); border-radius: 16px 16px 0 0; box-shadow: 0 -8px 24px rgb(26 23 27 / 0.15);
+}
+.sheet:focus { outline: none; }
+.sheet .award { padding: 0; border: 0; }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sheet-head .amount { font-weight: 700; color: var(--muted); }
+@media (min-width: 640px) {
+  .sheet-layer { align-items: center; }
+  .sheet { border-radius: 16px; }
+}

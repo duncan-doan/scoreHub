@@ -44,14 +44,29 @@ test('opening or refreshing the admin page keeps the Admin tab', async ({ page }
   }
 });
 
-test('fans vote on their phones; organizers open and close each award', async ({ page, browser, request }) => {
+test('the prizes are on Overview; an open vote is highlighted; fans vote in a popup; organizers open and close each award', async ({ page, browser, request }) => {
   // Two spectators' phones (each its own browser, so each has its own vote) and the organizer's.
   const phone = async () => (await browser.newContext({ ...devices['Pixel 7'] })).newPage();
   const fan1 = await phone();
   const fan2 = await phone();
-  await fan1.goto('/#vote');
-  const fanFavourite = (p) => p.locator('.award[data-award="fan_favourite"]');
-  await expect(fanFavourite(fan1)).toContainText('Ban tổ chức chưa mở bình chọn cho giải này.');
+  const row = (p) => p.locator('.prize-list li', { hasText: 'Đội được yêu thích nhất' });
+  const call = (p) => p.locator('.vote-call');
+  const popup = (p) => p.locator('.sheet .award[data-award="fan_favourite"]');
+
+  await fan1.goto('/');
+  await expect(fan1.locator('.prizes h2')).toHaveText('Giải thưởng2.000.000 ₫');
+  await expect(fan1.locator('.prize-tiles .place')).toHaveText(['Vô địch', 'Giải Nhì', 'Giải Ba']);
+  await expect(fan1.locator('.prize-tiles .amount')).toHaveText(['700.000 ₫', '400.000 ₫', '300.000 ₫']);
+  await expect(fan1.locator('.prizes h3')).toHaveText('Giải bình chọn200.000 ₫ mỗi giải');
+  await expect(fan1.locator('.prize-list .name')).toHaveText(['Đội Fair Play', 'Đội được yêu thích nhất', 'Pha cầu đẹp nhất']);
+  await expect(row(fan1)).toContainText('Chưa mở');
+  await expect(call(fan1)).toHaveCount(0); // no vote is open yet
+  await row(fan1).click();
+  await expect(fan1).toHaveURL(/#vote\/fan_favourite$/);
+  await expect(popup(fan1)).toContainText('Ban tổ chức chưa mở bình chọn cho giải này.');
+  await expect(fan1.locator('.sheet-head .amount')).toHaveText('Giải thưởng: 200.000 ₫');
+  await fan1.goBack(); // the phone's Back button closes the popup
+  await expect(fan1.locator('.sheet-layer')).toBeHidden();
 
   await logIn(page);
   await page.goto('/#admin');
@@ -59,27 +74,56 @@ test('fans vote on their phones; organizers open and close each award', async ({
   await expect(page.locator('.award-controls li', { hasText: 'Đội được yêu thích nhất' })).toContainText('Đang mở');
 
   await fan1.reload();
-  await fanFavourite(fan1).getByRole('button', { name: NAME.A2 }).click();
-  await expect(fanFavourite(fan1)).toContainText(`Bạn đã chọn ${NAME.A2}.`);
-  await fanFavourite(fan1).getByRole('button', { name: NAME.B1 }).click(); // changes the vote
-  await expect(fanFavourite(fan1).getByRole('button', { name: NAME.B1 })).toHaveAttribute('aria-pressed', 'true');
-  await expect(fanFavourite(fan1)).toContainText('Số phiếu: 1');
-  await fan2.goto('/#vote');
-  await fanFavourite(fan2).getByRole('button', { name: NAME.B1 }).click();
-  await expect(fanFavourite(fan2)).toContainText('Số phiếu: 2');
-  await expect(fanFavourite(fan2).locator('.vote-results')).toHaveCount(0); // counts stay hidden while open
+  await expect(call(fan1)).toContainText('Bình chọn đang mở');
+  await expect(call(fan1).locator('li')).toHaveText(['Đội được yêu thích nhấtBình chọn']);
+  await call(fan1).getByRole('link', { name: 'Bình chọn' }).click();
+  await popup(fan1).getByRole('button', { name: NAME.A2 }).click();
+  await expect(popup(fan1)).toContainText(`Bạn đã chọn ${NAME.A2}.`);
+  await popup(fan1).getByRole('button', { name: NAME.B1 }).click(); // changes the vote
+  await expect(popup(fan1).getByRole('button', { name: NAME.B1 })).toHaveAttribute('aria-pressed', 'true');
+  await expect(popup(fan1)).toContainText('Số phiếu: 1');
+  await fan1.getByRole('button', { name: 'Đóng' }).click();
+  await expect(fan1.locator('.sheet-layer')).toBeHidden();
+  await expect(call(fan1)).toHaveCount(0); // this phone has voted on everything open
+  await expect(row(fan1).locator('.button')).toHaveText('✓ Đã chọn');
+  // One line per award: the name doesn't wrap, and the button sits level with it.
+  const [name, button] = await Promise.all([row(fan1).locator('.name').boundingBox(), row(fan1).locator('.button').boundingBox()]);
+  expect(name.height).toBeLessThan(30);
+  expect(Math.abs(name.y + name.height / 2 - (button.y + button.height / 2))).toBeLessThan(3);
+
+  await fan2.goto('/#vote/fan_favourite'); // a link straight to the vote, e.g. shared in a chat
+  await popup(fan2).getByRole('button', { name: NAME.B1 }).click();
+  await expect(popup(fan2)).toContainText('Số phiếu: 2');
+  await expect(popup(fan2).locator('.vote-results')).toHaveCount(0); // counts stay hidden while open
+  await fan2.keyboard.press('Escape');
+  await expect(fan2).toHaveURL(/\/#?$/);
+  await expect(fan2.locator('.sheet-layer')).toBeHidden();
+  await expect(call(fan2)).toHaveCount(0);
 
   await page.reload();
   await page.locator('.award-controls li', { hasText: 'Đội được yêu thích nhất' }).getByRole('button', { name: 'Đóng bình chọn' }).click();
   for (const fan of [fan1, fan2]) {
     await fan.reload();
-    await expect(fanFavourite(fan).locator('.vote-headline')).toHaveText(`Đội thắng: ${NAME.B1}`);
-    await expect(fanFavourite(fan).locator('.vote-results li.winner .n')).toHaveText('2');
+    await expect(row(fan).locator('.winner')).toHaveText(NAME.B1);
+    await expect(fan.locator('.prize-list li', { hasText: 'Pha cầu đẹp nhất' })).toContainText('Chưa mở');
+    await row(fan).click();
+    await expect(popup(fan).locator('.vote-headline')).toHaveText(`Đội thắng: ${NAME.B1}`);
+    await expect(popup(fan).locator('.vote-results li.winner .n')).toHaveText('2');
   }
-  await expect(fan1.locator('.award[data-award="best_rally"]')).toContainText('Chưa mở');
   await fan1.context().close();
   await fan2.context().close();
   expect((await request.put('/api/awards/fan_favourite', { headers: HEADERS, data: { status: 'not_open' } })).ok()).toBe(true);
+});
+
+test('a red dot on the Overview tab while a match is live', async ({ page, request }) => {
+  await page.goto('/#groups');
+  await expect(page.locator('nav [data-view="overview"]')).not.toHaveClass(/has-live/);
+  expect((await request.put('/api/matches/G1/serve', { headers: HEADERS, data: { side: 1 } })).ok()).toBe(true);
+  expect((await request.post('/api/matches/G1/point', { headers: HEADERS, data: { side: 1, count: 0 } })).ok()).toBe(true);
+  await page.reload();
+  await expect(page.locator('nav [data-view="overview"]')).toHaveClass(/has-live/);
+  await expect(page.getByRole('link', { name: 'Tổng quan · Đang thi đấu' })).toBeVisible();
+  await clearAll(request);
 });
 
 test('the Trueson logo leads back to Overview', async ({ page }) => {
@@ -135,8 +179,24 @@ test('the Knockout tab lists the final first, then the 3rd-place match, then the
   await page.goto('/#knockout');
   await expect(page.locator('main h2')).toHaveText(['Chung kết', 'Tranh hạng Ba', 'Bán kết']);
   await page.getByRole('button', { name: 'English' }).click();
-  await expect(page.locator('main h2')).toHaveText(['Final', '3rd-place match', 'Semi-finals']);
-  await expect(page.locator('main .match header > span:first-child')).toHaveText(['Final', '3rd-place match', 'Semi-final 1', 'Semi-final 2']);
+  await expect(page.locator('main h2')).toHaveText(['Final', '3rd-place match', 'Semi-Finals']);
+  await expect(page.locator('main .match header > span:first-child')).toHaveText(['Final', '3rd-place match', 'Semi-Final 1', 'Semi-Final 2']);
+});
+
+test('a match not played yet shows its planned time and court; once played, it no longer does', async ({ page, request }) => {
+  await page.goto('/');
+  await expect(page.locator('[data-match="G1"] header > span:first-child + .plan')).toHaveText('Dự kiến 14:30 · Sân 1'); // next to the match's name
+  await expect(page.locator('[data-match="G2"] .plan')).toHaveText('Dự kiến 14:30 · Sân 2');
+  await page.goto('/#knockout');
+  await expect(page.locator('main .plan')).toHaveText(['Dự kiến 16:25 · Sân 1', 'Dự kiến 16:00 · Sân 1', 'Dự kiến 15:45 · Sân 1', 'Dự kiến 15:45 · Sân 2']);
+  await page.getByRole('button', { name: 'English' }).click();
+  await expect(page.locator('[data-match="FINAL"] .plan')).toHaveText('Planned 16:25 · Court 1');
+
+  await enter(request, { G1: [21, 15] });
+  await page.goto('/');
+  await expect(page.locator('[data-match="G1"]')).toBeVisible(); // now under Latest results
+  await expect(page.locator('[data-match="G1"] .plan')).toHaveCount(0);
+  await clearAll(request);
 });
 
 test('an organizer records the draw for a full tie', async ({ page, request }) => {

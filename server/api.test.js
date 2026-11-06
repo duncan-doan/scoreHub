@@ -66,6 +66,17 @@ describe('API', () => {
     assert.equal(await check(), 200);
   });
 
+  test('the votes are checked again on every refresh too, as Overview polls them', async () => {
+    const path = `/api/votes?voter=${'a'.repeat(32)}`;
+    const r = await api.call('GET', path, undefined, null);
+    assert.equal(r.headers.get('cache-control'), 'no-cache');
+    const check = () =>
+      new Promise((resolve) => http.get(`${api.base}${path}`, { headers: { 'If-None-Match': r.headers.get('etag') } }, (res) => resolve(res.resume().statusCode)));
+    assert.equal(await check(), 304);
+    await api.call('PUT', '/api/awards/fair_play', { status: 'open' });
+    assert.equal(await check(), 200);
+  });
+
   test('every write needs the PIN', async () => {
     const sets = { sets: [[21, 15]] };
     assert.deepEqual((await api.call('PUT', '/api/matches/G1/sets', sets, null)).body, { error: 'wrong_pin' });
